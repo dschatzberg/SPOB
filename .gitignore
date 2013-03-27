@@ -1,3 +1,7 @@
+build/Makefile.in
+build/testapp
+*.d
+
 # Compiled Object files
 *.slo
 *.lo
