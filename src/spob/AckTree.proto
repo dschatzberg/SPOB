@@ -1,0 +1,6 @@
+package spob;
+
+message AckTree {
+  required uint32 primary = 1;
+  required uint64 count = 2;
+}

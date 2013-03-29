@@ -1,0 +1,6 @@
+package spob;
+
+message Entry {
+  required uint64 zxid = 1;
+  required bytes message = 2;
+}

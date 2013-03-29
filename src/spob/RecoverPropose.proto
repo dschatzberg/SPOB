@@ -1,0 +1,8 @@
+package spob;
+
+import "spob/Entry.proto";
+
+message RecoverPropose {
+  required uint32 primary = 1;
+  repeated Entry propose = 2;
+}
