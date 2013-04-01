@@ -1,3 +1,5 @@
+*.pb.cc
+*.pb.h
 build/Makefile.in
 build/testapp
 *.d

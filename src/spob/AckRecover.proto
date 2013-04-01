@@ -1,0 +1,5 @@
+package spob;
+
+message AckRecover {
+  required uint32 primary = 1;
+};

@@ -1,0 +1,5 @@
+package spob;
+
+message RecoverCommit {
+  required uint32 primary = 1;
+};

@@ -3,17 +3,27 @@
 VPATH=../src
 
 LIBSPOB_SRCFILES := \
+	spob/Ack.pb.cc \
+	spob/AckRecover.pb.cc \
 	spob/AckTree.pb.cc \
+	spob/Commit.pb.cc \
 	spob/ConstructTree.pb.cc \
 	spob/Entry.pb.cc \
+	spob/Propose.pb.cc \
+	spob/RecoverCommit.pb.cc \
 	spob/RecoverPropose.pb.cc \
 	spob/StateMachine.cpp
 
 LIBSPOB_HDRFILES := \
 	Spob.hpp \
+	spob/Ack.pb.h \
+	spob/AckRecover.pb.h \
 	spob/AckTree.pb.h \
+	spob/Commit.pb.h \
 	spob/ConstructTree.pb.h \
 	spob/Entry.pb.h \
+	spob/Propose.pb.h \
+	spob/RecoverCommit.pb.h \
 	spob/RecoverPropose.pb.h
 
 LIBSPOB_OBJFILES := $(patsubst %.cc, %.o, \
