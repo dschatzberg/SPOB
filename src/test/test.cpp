@@ -5,12 +5,19 @@
 
 namespace mpi = boost::mpi;
 
+namespace {
+  bool quit = false;
+}
+
 class Callback {
 public:
-  Callback(spob::StateMachine** sm) : sm_(sm)
+  Callback(spob::StateMachine** sm, long int num_messages)
+    : sm_(sm), n_(num_messages)
   {
     mpi::communicator world;
     rank_ = world.rank();
+    primary_ = 0;
+    count_ = 0;
   }
   static void Status(void* data, spob::StateMachine::Status status,
                             uint32_t primary)
@@ -27,19 +34,35 @@ private:
   void Status(spob::StateMachine::Status status, uint32_t primary)
   {
     if (status == spob::StateMachine::LEADING) {
+#ifdef LOG
       std::cout << rank_ << ": Recovered and Leading" << std::endl;
+#endif
+      primary_ = primary;
       (*sm_)->Propose("test");
     } else if (spob::StateMachine::FOLLOWING) {
+      primary_ = primary;
+#ifdef LOG
       std::cout << rank_ << ": Recovered and Following " << primary << std::endl;
+#endif
     }
   }
   void Deliver(uint64_t id, const std::string& message)
   {
+    count_++;
+#ifdef LOG
     std::cout << rank_ << ": Delivered message: 0x" << std::hex << id <<
       std::dec << ", \"" << message << "\"" << std::endl;
+#endif
+    if (count_ == n_) {
+      quit = true;
+    } else if (rank_ == primary_) {
+      (*sm_)->Propose("test");
+    }
   }
-
+  uint32_t primary_;
   uint32_t rank_;
+  long int count_;
+  long int n_;
   spob::StateMachine** sm_;
 };
 
@@ -67,9 +90,10 @@ public:
 
   void Send(const spob::ConstructTree& ct, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending ConstructTree to " << to <<
       ": " << ct.ShortDebugString() << std::endl;
-
+#endif
     std::string str;
     if (!ct.SerializeToString(&str)) {
       throw std::runtime_error("Failed to serialized a ConstructTree");
@@ -80,8 +104,10 @@ public:
 
   void Send(const spob::AckTree& at, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending AckTree to " << to <<
       ": " << at.ShortDebugString() << std::endl;
+#endif
 
     std::string str;
     if (!at.SerializeToString(&str)) {
@@ -93,8 +119,10 @@ public:
 
   void Send(const spob::RecoverPropose& rp, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending RecoverPropose to " << to <<
       ": " << rp.ShortDebugString() << std::endl;
+#endif
 
     std::string str;
     if (!rp.SerializeToString(&str)) {
@@ -106,8 +134,10 @@ public:
 
   void Send(const spob::AckRecover& ar, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending AckRecover to " << to <<
       ": " << ar.ShortDebugString() << std::endl;
+#endif
 
     std::string str;
     if (!ar.SerializeToString(&str)) {
@@ -119,8 +149,10 @@ public:
 
   void Send(const spob::RecoverCommit& rc, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending RecoverCommit to " << to <<
       ": " << rc.ShortDebugString() << std::endl;
+#endif
 
     std::string str;
     if (!rc.SerializeToString(&str)) {
@@ -132,8 +164,10 @@ public:
 
   void Send(const spob::Propose& p, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending Propose to " << to <<
       ": " << p.ShortDebugString() << std::endl;
+#endif
 
     std::string str;
     if (!p.SerializeToString(&str)) {
@@ -145,8 +179,10 @@ public:
 
   void Send(const spob::Ack& a, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending Ack to " << to <<
       ": " << a.ShortDebugString() << std::endl;
+#endif
 
     std::string str;
     if (!a.SerializeToString(&str)) {
@@ -158,8 +194,10 @@ public:
 
   void Send(const spob::Commit& c, uint32_t to)
   {
+#ifdef LOG
     std::cout << rank_ << ": Sending Commit to " << to <<
       ": " << c.ShortDebugString() << std::endl;
+#endif
 
     std::string str;
     if (!c.SerializeToString(&str)) {
@@ -186,64 +224,80 @@ public:
         if (!ct.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse ConstructTree");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received ConstructTree from " <<
           opt_status->source() << ": " << ct.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(ct, opt_status->source());
         break;
       case AckTree:
         if (!at.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse AckTree");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received AckTree from " <<
           opt_status->source() << ": " << at.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(at, opt_status->source());
         break;
       case RecoverPropose:
         if (!rp.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse RecoverPropose");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received RecoverPropose from " <<
           opt_status->source() << ": " << rp.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(rp, opt_status->source());
         break;
       case AckRecover:
         if (!ar.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse AckRecover");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received AckRecover from " <<
           opt_status->source() << ": " << ar.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(ar, opt_status->source());
         break;
       case RecoverCommit:
         if (!rc.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse RecoverCommit");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received RecoverCommit from " <<
           opt_status->source() << ": " << rc.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(rc, opt_status->source());
         break;
       case Propose:
         if (!p.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse Propose");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received Propose from " <<
           opt_status->source() << ": " << p.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(p, opt_status->source());
         break;
       case Ack:
         if (!a.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse Ack");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received Ack from " <<
           opt_status->source() << ": " << a.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(a, opt_status->source());
         break;
       case Commit:
         if (!c.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse Commit");
         }
+#ifdef LOG
         std::cout << rank_ << ": Received Commit from " <<
           opt_status->source() << ": " << c.ShortDebugString() << std::endl;
+#endif
         (*sm_)->Receive(c, opt_status->source());
         break;
       }
@@ -283,14 +337,24 @@ int main(int argc, char* argv[])
 {
   mpi::environment env(argc, argv);
   spob::StateMachine* sm;
-  Callback cb(&sm);
+  if (argc < 2) {
+    std::cerr << "Usage: " << argv[0] << " num_messages" << std::endl;
+    return -1;
+  }
+  long int num_messages = strtol(argv[1], NULL, 10);
+  if (num_messages <= 0 || num_messages == LONG_MAX ||
+      num_messages == LONG_MIN) {
+    std::cerr << "Invalid number of messages" << std::endl;
+    return -1;
+  }
+  Callback cb(&sm, num_messages);
   Communicator comm(&sm);
   FailureDetector fd;
   mpi::communicator world;
   sm = new spob::StateMachine(world.rank(), comm, fd, Callback::Deliver,
                               Callback::Status, reinterpret_cast<void*>(&cb));
   sm->Start();
-  while (1) {
+  while (!quit) {
     comm.Process();
   }
   delete sm;

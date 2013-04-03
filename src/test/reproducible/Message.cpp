@@ -1,0 +1,68 @@
+#include "test/reproducible/Message.hpp"
+
+Message::Message() : type_(ConstructTree), ct_()
+{
+}
+
+Message::Message(uint32_t from, spob::ConstructTree ct) :
+  type_(ConstructTree), from_(from), ct_(ct)
+{
+}
+Message::Message(uint32_t from, spob::AckTree at) :
+  type_(AckTree), from_(from), at_(at)
+{
+}
+Message::Message(uint32_t from, spob::RecoverPropose rp) :
+  type_(RecoverPropose), from_(from), rp_(rp)
+{
+}
+Message::Message(uint32_t from, spob::AckRecover ar) :
+  type_(AckRecover), from_(from), ar_(ar)
+{
+}
+Message::Message(uint32_t from, spob::RecoverCommit rc) :
+  type_(RecoverCommit), from_(from), rc_(rc)
+{
+}
+Message::Message(uint32_t from, spob::Propose p) :
+  type_(Propose), from_(from), p_(p)
+{
+}
+Message::Message(uint32_t from, spob::Ack a) :
+  type_(Ack), from_(from), a_(a)
+{
+}
+Message::Message(uint32_t from, spob::Commit c) :
+  type_(Commit), from_(from), c_(c)
+{
+}
+
+Message::~Message()
+{
+  switch (type_) {
+  case ConstructTree:
+    ct_.~ConstructTree();
+    break;
+  case AckTree:
+    at_.~AckTree();
+    break;
+  case RecoverPropose:
+    rp_.~RecoverPropose();
+    break;
+  case AckRecover:
+    ar_.~AckRecover();
+    break;
+  case RecoverCommit:
+    rc_.~RecoverCommit();
+    break;
+  case Propose:
+    p_.~Propose();
+    break;
+  case Ack:
+    a_.~Ack();
+    break;
+  case Commit:
+    c_.~Commit();
+    break;
+  }
+}

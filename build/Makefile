@@ -43,10 +43,27 @@ TEST_DEPFILES := $(patsubst %.cc, %.d, \
 
 TEST_LIBS := -lboost_mpi -lboost_serialization -lprotobuf
 
+REPRODUCIBLE_TEST_SRCFILES := \
+	test/reproducible/Communicator.cpp \
+	test/reproducible/Coroutine.cpp \
+	test/reproducible/FailureDetector.cpp \
+	test/reproducible/Message.cpp \
+	test/reproducible/test.cpp
+
+REPRODUCIBLE_TEST_HDRFILES := \
+	test/reproducible/Communicator.hpp \
+	test/reproducible/Coroutine.hpp \
+	test/reproducible/FailuredDetector.hpp \
+	test/reproducible/Message.hpp
+
+REPRODUCIBLE_TEST_OBJFILES := $(patsubst %.cc, %.o, \
+	$(patsubst %.cpp, %.o, $(REPRODUCIBLE_TEST_SRCFILES))) libspob.a
+REPRODUCIBLE_TEST_DEPFILES := $(patsubst %.cc, %.d, \
+	$(patsubst %.cpp, %.d, $(REPRODUCIBLE_TEST_SRCFILES)))
+
+REPRODUCIBLE_TEST_LIBS := -lboost_context -lprotobuf
 
 MPICXX := mpicxx
-
-CXXFLAGS := $(CXXFLAGS)
 
 .PHONY: all clean
 
@@ -57,6 +74,10 @@ libspob.a: $(LIBSPOB_HDRFILES) $(LIBSPOB_OBJFILES)
 
 testapp: $(TEST_HDRFILES) $(TEST_OBJFILES)
 	$(MPICXX) $(CXXFLAGS) $(TEST_OBJFILES) $(TEST_LIBS) -o $@
+
+reproducible_test: $(REPRODUCIBLE_TEST_HDFFILES) $(REPRODUCIBLE_TEST_OBJFILES)
+	$(CXX) $(CXXFLAGS) $(REPRODUCIBLE_TEST_OBJFILES) \
+	$(REPRODUCIBLE_TEST_LIBS) -o $@
 
 clean:
 	-$(RM) $(wildcard $(LIBSPOB_OBJFILES) $(LIBSPOB_DEPFILES) \
@@ -69,13 +90,17 @@ clean:
 -include $(LIBSPOB_DEPFILES)
 -include $(TEST_DEPFILES)
 
+test/test.o: test/test.cpp Makefile
+	mkdir -p $(dir $@)
+	$(MPICXX) $(CXXFLAGS) -iquote$(VPATH) -iquote. -MMD -MP -c $< -o $@
+
 %.pb.o: %.pb.cc Makefile
 	mkdir -p $(dir $@)
-	$(MPICXX) $(CXXFLAGS) -iquote. -MMD -MP -c $< -o $@
+	$(CXX) $(CXXFLAGS) -iquote. -MMD -MP -c $< -o $@
 
 %.o: %.cpp Makefile
 	mkdir -p $(dir $@)
-	$(MPICXX) $(CXXFLAGS) -iquote$(VPATH) -iquote. -MMD -MP -c $< -o $@
+	$(CXX) $(CXXFLAGS) -iquote$(VPATH) -iquote. -MMD -MP -c $< -o $@
 
 
 %.pb.h %.pb.cc: %.proto Makefile

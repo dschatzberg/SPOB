@@ -2,6 +2,7 @@
 *.pb.h
 build/Makefile.in
 build/testapp
+build/reproducible_test
 *.d
 
 # Compiled Object files
