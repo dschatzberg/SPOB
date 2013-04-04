@@ -12,6 +12,7 @@
 #include "spob/AckTree.pb.h"
 #include "spob/Commit.pb.h"
 #include "spob/ConstructTree.pb.h"
+#include "spob/NakTree.pb.h"
 #include "spob/Propose.pb.h"
 #include "spob/RecoverCommit.pb.h"
 #include "spob/RecoverPropose.pb.h"
@@ -21,6 +22,7 @@ namespace spob {
   public:
     virtual void Send(const ConstructTree& ct, uint32_t to) = 0;
     virtual void Send(const AckTree& at, uint32_t to) = 0;
+    virtual void Send(const NakTree& nt, uint32_t to) = 0;
     virtual void Send(const RecoverPropose& rp, uint32_t to) = 0;
     virtual void Send(const AckRecover& ar, uint32_t to) = 0;
     virtual void Send(const RecoverCommit& rc, uint32_t to) = 0;
@@ -58,6 +60,7 @@ namespace spob {
 
     void Receive(const spob::ConstructTree& ct, uint32_t from);
     void Receive(const spob::AckTree& at, uint32_t from);
+    void Receive(const spob::NakTree& at, uint32_t from);
     void Receive(const spob::RecoverPropose& rp, uint32_t from);
     void Receive(const spob::AckRecover& ar, uint32_t from);
     void Receive(const spob::RecoverCommit& rc, uint32_t from);
@@ -88,6 +91,8 @@ namespace spob {
     uint32_t max_rank_;
     uint64_t last_proposed_mid_;
     uint64_t current_mid_;
+    bool constructing_;
+    bool recovering_;
     unsigned int tree_acks_;
     std::list<uint32_t> ancestors_;
     std::map<uint32_t, std::pair<uint32_t, uint64_t> > children_;
@@ -98,6 +103,7 @@ namespace spob {
     boost::icl::interval_set<uint32_t> recover_ack_;
     spob::ConstructTree ct_;
     spob::AckTree at_;
+    spob::NakTree nt_;
     spob::RecoverPropose rp_;
     spob::AckRecover ar_;
     spob::RecoverCommit rc_;

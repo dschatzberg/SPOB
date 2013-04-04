@@ -9,6 +9,7 @@ LIBSPOB_SRCFILES := \
 	spob/Commit.pb.cc \
 	spob/ConstructTree.pb.cc \
 	spob/Entry.pb.cc \
+	spob/NakTree.pb.cc \
 	spob/Propose.pb.cc \
 	spob/RecoverCommit.pb.cc \
 	spob/RecoverPropose.pb.cc \
@@ -22,6 +23,7 @@ LIBSPOB_HDRFILES := \
 	spob/Commit.pb.h \
 	spob/ConstructTree.pb.h \
 	spob/Entry.pb.h \
+	spob/NakTree.pb.h \
 	spob/Propose.pb.h \
 	spob/RecoverCommit.pb.h \
 	spob/RecoverPropose.pb.h
@@ -89,6 +91,7 @@ clean:
 
 -include $(LIBSPOB_DEPFILES)
 -include $(TEST_DEPFILES)
+-include $(REPRODUCIBLE_TEST_DEPFILES)
 
 test/test.o: test/test.cpp Makefile
 	mkdir -p $(dir $@)

@@ -11,6 +11,7 @@ public:
   Communicator(Coroutine& c, uint32_t rank, uint32_t size);
   void Send(const spob::ConstructTree& ct, uint32_t to);
   void Send(const spob::AckTree& at, uint32_t to);
+  void Send(const spob::NakTree& nt, uint32_t to);
   void Send(const spob::RecoverPropose& rp, uint32_t to);
   void Send(const spob::AckRecover& ar, uint32_t to);
   void Send(const spob::RecoverCommit& rc, uint32_t to);

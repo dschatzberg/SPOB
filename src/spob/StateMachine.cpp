@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "Spob.hpp"
 
 using namespace spob;
@@ -38,7 +40,7 @@ StateMachine::Propose(const std::string& message)
 void
 StateMachine::Receive(const spob::ConstructTree& ct, uint32_t from)
 {
-  // only act if this message has a newer priamry than we are aware of
+  // only act if this message has a newer primary than we are aware of
   // or same primary, but higher count
   uint32_t new_primary = ct.ancestors(ct.ancestors_size() - 1);
   if (new_primary > primary_ ||
@@ -60,6 +62,23 @@ StateMachine::Receive(const spob::AckTree& at, uint32_t from)
     children_[from].second = at.last_mid();
     if (tree_acks_ == children_.size()) {
       AckTree();
+    }
+  }
+}
+
+void
+StateMachine::Receive(const spob::NakTree& nt, uint32_t from)
+{
+  if (nt.primary() == primary_ && nt.count() == count_) {
+    assert(children_.count(from) == 1);
+    count_++;
+    if (primary_ == rank_) {
+      max_rank_ = comm_.size() - 1;
+      ancestors_.clear();
+      ConstructTree(max_rank_);
+    } else {
+      children_.clear();
+      comm_.Send(nt, ancestors_.front());
     }
   }
 }
@@ -186,6 +205,8 @@ StateMachine::Receive(const spob::Commit& c, uint32_t from)
 void
 StateMachine::Recover()
 {
+  recovering_ = true;
+  constructing_ = true;
   // If the set of failed processes contains the set of processes
   // with lower rank than me, then I am the lowest ranked correct process
   using namespace boost::icl;
@@ -215,14 +236,13 @@ StateMachine::ConstructTree(uint32_t max_rank)
   interval_set<uint32_t> range(interval<uint32_t>::closed(rank_ + 1,
                                                           max_rank));
   range -= fd_.set();
-
   if (cardinality(range) == 0) {
     //no tree needs to be constructed
     AckTree();
     return;
   }
   //left child is next lowest rank above ours
-  uint32_t left_child = lower(range);
+  uint32_t left_child = first(range);
 
   //right child is the median process in our subtree
   uint32_t right_child;
@@ -263,6 +283,7 @@ StateMachine::ConstructTree(uint32_t max_rank)
 void
 StateMachine::AckTree()
 {
+  constructing_ = false;
   if (rank_ == primary_) {
     // Tree construction succeeded, send outstanding proposals down
     // the tree
@@ -328,11 +349,43 @@ StateMachine::RecoverCommit()
     df_(cb_data_, it->first, it->second.first);
   }
   log_.clear();
+  recovering_ = false;
 }
 
 void
 StateMachine::FDCallback(uint32_t rank)
 {
+  if (rank == primary_) {
+    Recover();
+  } else if (constructing_ && children_.count(rank)) {
+    count_++;
+    if (rank_ == primary_) {
+      ConstructTree(max_rank_);
+    } else {
+      children_.clear();
+      nt_.set_primary(primary_);
+      nt_.set_count(count_);
+      comm_.Send(nt_, ancestors_.front());
+    }
+  } else if (!constructing_) {
+    if (rank_ < rank && rank <= max_rank_) {
+      children_.erase(rank);
+      if (recovering_) {
+        boost::icl::interval_set<uint32_t> set = recover_ack_;
+        set += fd_.set();
+        if (contains(set,
+                     boost::icl::interval<uint32_t>::closed(rank_ + 1,
+                                                            max_rank_))) {
+          AckRecover();
+        }
+      } else {
+        throw std::runtime_error("Descendent in subtree failed: Unimplemented");
+      }
+    }
+    if (ancestors_.front() == rank) {
+      throw std::runtime_error("Parent failed in a constructed Tree: Unimplemented");
+    }
+  }
 }
 
 void

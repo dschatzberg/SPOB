@@ -2,11 +2,12 @@
 
 Coroutine::Coroutine(std::vector<Coroutine*>& coroutines,
                      std::set<Coroutine*>& runnable,
-                     uint32_t rank, uint32_t size)
+                     uint32_t rank, uint32_t size,
+                     std::default_random_engine& rng)
   : comm_(*this, rank, size),
     sm_(rank, comm_, fd_, Deliver, Status, reinterpret_cast<void*>(this)),
     coroutines_(coroutines), runnable_(runnable),
-    rank_(rank)
+    rank_(rank), failed_(false), rng_(rng)
 {
 }
 
@@ -15,73 +16,105 @@ Coroutine::operator()(boost::coroutines::coroutine<void()>::caller_type& ca)
 {
   ca_ = &ca;
   sm_.Start();
+  std::bernoulli_distribution notify;
   while (1) {
-    if (queue_.size() > 0) {
+    if (!queue_.empty() || !fd_.unreported_.empty()) {
       runnable_.insert(this);
     }
     ca();
     runnable_.erase(this);
-    const Message& m = queue_.front();
-    switch(m.type_) {
-    case Message::ConstructTree:
+    if ((!fd_.unreported_.empty() && notify(rng_)) || queue_.empty()) {
+      std::uniform_int_distribution<uint32_t> dist(0, fd_.unreported_.size() - 1);
+      uint32_t report = dist(rng_);
+
+      std::set<uint32_t>::iterator it = fd_.unreported_.begin();
+      for (int i = 0; i < report; i++) {
+        ++it;
+      }
+      uint32_t rank = *it;
+      fd_.unreported_.erase(it);
+      fd_.set_.insert(rank);
 #ifdef LOG
-      std::cout << rank_ << ": Received ConstructTree from " <<
-        m.from_ << ": " << m.ct_.ShortDebugString() << std::endl;
+      std::cout << rank_ << ": Detected " << rank << " failed" << std::endl;
 #endif
-      sm_.Receive(m.ct_, m.from_);
-      break;
-    case Message::AckTree:
+      fd_.cb_(fd_.data_, rank);
+    } else {
+      const Message& m = queue_.front();
+      switch(m.type_) {
+      case Message::ConstructTree:
 #ifdef LOG
-      std::cout << rank_ << ": Received AckTree from " <<
-        m.from_ << ": " << m.at_.ShortDebugString() << std::endl;
+        std::cout << rank_ << ": Received ConstructTree from " <<
+          m.from_ << ": " << m.ct_.ShortDebugString() << std::endl;
 #endif
-      sm_.Receive(m.at_, m.from_);
-      break;
-    case Message::RecoverPropose:
+        sm_.Receive(m.ct_, m.from_);
+        break;
+      case Message::AckTree:
 #ifdef LOG
-      std::cout << rank_ << ": Received RecoverPropose from " <<
-        m.from_ << ": " << m.rp_.ShortDebugString() << std::endl;
+        std::cout << rank_ << ": Received AckTree from " <<
+          m.from_ << ": " << m.at_.ShortDebugString() << std::endl;
 #endif
-      sm_.Receive(m.rp_, m.from_);
-      break;
-    case Message::AckRecover:
+        sm_.Receive(m.at_, m.from_);
+        break;
+      case Message::RecoverPropose:
 #ifdef LOG
-      std::cout << rank_ << ": Received AckRecover from " <<
-        m.from_ << ": " << m.ar_.ShortDebugString() << std::endl;
+        std::cout << rank_ << ": Received RecoverPropose from " <<
+          m.from_ << ": " << m.rp_.ShortDebugString() << std::endl;
 #endif
-      sm_.Receive(m.ar_, m.from_);
-      break;
-    case Message::RecoverCommit:
+        sm_.Receive(m.rp_, m.from_);
+        break;
+      case Message::AckRecover:
 #ifdef LOG
-      std::cout << rank_ << ": Received RecoverCommit from " <<
-        m.from_ << ": " << m.rc_.ShortDebugString() << std::endl;
+        std::cout << rank_ << ": Received AckRecover from " <<
+          m.from_ << ": " << m.ar_.ShortDebugString() << std::endl;
 #endif
-      sm_.Receive(m.rc_, m.from_);
-      break;
-    case Message::Propose:
+        sm_.Receive(m.ar_, m.from_);
+        break;
+      case Message::RecoverCommit:
 #ifdef LOG
-      std::cout << rank_ << ": Received Propose from " <<
-        m.from_ << ": " << m.p_.ShortDebugString() << std::endl;
+        std::cout << rank_ << ": Received RecoverCommit from " <<
+          m.from_ << ": " << m.rc_.ShortDebugString() << std::endl;
 #endif
-      sm_.Receive(m.p_, m.from_);
-      break;
-    case Message::Ack:
+        sm_.Receive(m.rc_, m.from_);
+        break;
+      case Message::Propose:
 #ifdef LOG
-      std::cout << rank_ << ": Received Ack from " <<
-        m.from_ << ": " << m.a_.ShortDebugString() << std::endl;
+        std::cout << rank_ << ": Received Propose from " <<
+          m.from_ << ": " << m.p_.ShortDebugString() << std::endl;
 #endif
-      sm_.Receive(m.a_, m.from_);
-      break;
-    case Message::Commit:
+        sm_.Receive(m.p_, m.from_);
+        break;
+      case Message::Ack:
 #ifdef LOG
-      std::cout << rank_ << ": Received Commit from " <<
-        m.from_ << ": " << m.c_.ShortDebugString() << std::endl;
+        std::cout << rank_ << ": Received Ack from " <<
+          m.from_ << ": " << m.a_.ShortDebugString() << std::endl;
 #endif
-      sm_.Receive(m.c_, m.from_);
-      break;
+        sm_.Receive(m.a_, m.from_);
+        break;
+      case Message::Commit:
+#ifdef LOG
+        std::cout << rank_ << ": Received Commit from " <<
+          m.from_ << ": " << m.c_.ShortDebugString() << std::endl;
+#endif
+        sm_.Receive(m.c_, m.from_);
+        break;
+      }
+      queue_.pop();
     }
-    queue_.pop();
   }
+}
+
+void
+Coroutine::Fail()
+{
+  failed_ = true;
+  runnable_.erase(this);
+}
+
+void
+Coroutine::Failure(uint32_t rank)
+{
+  fd_.unreported_.insert(rank);
+  runnable_.insert(this);
 }
 
 void

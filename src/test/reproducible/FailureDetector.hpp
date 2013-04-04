@@ -7,6 +7,9 @@ public:
   FailureDetector();
   void AddCallback(Callback cb, void* data);
   const boost::icl::interval_set<uint32_t>& set() const;
-private:
+
+  Callback cb_;
+  void* data_;
   boost::icl::interval_set<uint32_t> set_;
+  std::set<uint32_t> unreported_;
 };

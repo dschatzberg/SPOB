@@ -14,8 +14,10 @@ Communicator::Send(const spob::ConstructTree& ct, uint32_t to)
   std::cout << rank_ << ": Sending ConstructTree to " << to <<
     ": " << ct.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, ct);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, ct);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
@@ -27,8 +29,25 @@ Communicator::Send(const spob::AckTree& at, uint32_t to)
   std::cout << rank_ << ": Sending AckTree to " << to <<
     ": " << at.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, at);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, at);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
+  c_.runnable_.insert(&c_);
+  (*(c_.ca_))();
+  c_.runnable_.erase(&c_);
+}
+void
+Communicator::Send(const spob::NakTree& nt, uint32_t to)
+{
+#ifdef LOG
+  std::cout << rank_ << ": Sending NakTree to " << to <<
+    ": " << nt.ShortDebugString() << std::endl;
+#endif
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, nt);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
@@ -40,8 +59,10 @@ Communicator::Send(const spob::RecoverPropose& rp, uint32_t to)
   std::cout << rank_ << ": Sending RecoverPropose to " << to <<
     ": " << rp.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, rp);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, rp);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
@@ -53,8 +74,10 @@ Communicator::Send(const spob::AckRecover& ar, uint32_t to)
   std::cout << rank_ << ": Sending AckRecover to " << to <<
     ": " << ar.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, ar);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, ar);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
@@ -66,8 +89,10 @@ Communicator::Send(const spob::RecoverCommit& rc, uint32_t to)
   std::cout << rank_ << ": Sending RecoverCommit to " << to <<
     ": " << rc.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, rc);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, rc);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
@@ -79,8 +104,10 @@ Communicator::Send(const spob::Propose& p, uint32_t to)
   std::cout << rank_ << ": Sending Propose to " << to <<
     ": " << p.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, p);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, p);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
@@ -92,8 +119,10 @@ Communicator::Send(const spob::Ack& a, uint32_t to)
   std::cout << rank_ << ": Sending Ack to " << to <<
     ": " << a.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, a);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, a);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
@@ -105,8 +134,10 @@ Communicator::Send(const spob::Commit& c, uint32_t to)
   std::cout << rank_ << ": Sending Commit to " << to <<
     ": " << c.ShortDebugString() << std::endl;
 #endif
-  c_.coroutines_[to]->queue_.emplace(rank_, c);
-  c_.runnable_.insert(c_.coroutines_[to]);
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, c);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
   c_.runnable_.insert(&c_);
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);

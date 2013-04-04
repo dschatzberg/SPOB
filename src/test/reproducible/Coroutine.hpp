@@ -1,6 +1,7 @@
 #pragma once
 
 #include <queue>
+#include <random>
 #include <vector>
 
 #include <boost/coroutine/all.hpp>
@@ -13,9 +14,11 @@
 class Coroutine {
 public:
   Coroutine(std::vector<Coroutine*>& coroutines, std::set<Coroutine*>& runnable,
-            uint32_t rank, uint32_t size);
+            uint32_t rank, uint32_t size, std::default_random_engine& rng);
   void operator()(boost::coroutines::coroutine<void()>::caller_type& ca);
 
+  void Fail();
+  void Failure(uint32_t rank);
   static void Deliver(void* data, uint64_t id, const std::string& message);
   static void Status(void* data, spob::StateMachine::Status status,
                      uint32_t primary);
@@ -28,4 +31,6 @@ public:
   std::set<Coroutine*>& runnable_;
   boost::coroutines::coroutine<void()>::caller_type* ca_;
   uint32_t rank_;
+  bool failed_;
+  std::default_random_engine& rng_;
 };

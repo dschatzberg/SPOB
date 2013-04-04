@@ -12,6 +12,10 @@ Message::Message(uint32_t from, spob::AckTree at) :
   type_(AckTree), from_(from), at_(at)
 {
 }
+Message::Message(uint32_t from, spob::NakTree nt) :
+  type_(NakTree), from_(from), nt_(nt)
+{
+}
 Message::Message(uint32_t from, spob::RecoverPropose rp) :
   type_(RecoverPropose), from_(from), rp_(rp)
 {
@@ -45,6 +49,9 @@ Message::~Message()
     break;
   case AckTree:
     at_.~AckTree();
+    break;
+  case NakTree:
+    nt_.~NakTree();
     break;
   case RecoverPropose:
     rp_.~RecoverPropose();

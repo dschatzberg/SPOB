@@ -7,6 +7,8 @@ FailureDetector::FailureDetector()
 void
 FailureDetector::AddCallback(Callback cb, void* data)
 {
+  cb_ = cb;
+  data_ = data;
 }
 
 const boost::icl::interval_set<uint32_t>&

@@ -7,6 +7,7 @@ public:
   Message();
   Message(uint32_t from, spob::ConstructTree ct);
   Message(uint32_t from, spob::AckTree at);
+  Message(uint32_t from, spob::NakTree nt);
   Message(uint32_t from, spob::RecoverPropose rp);
   Message(uint32_t from, spob::AckRecover ar);
   Message(uint32_t from, spob::RecoverCommit rc);
@@ -16,6 +17,7 @@ public:
   enum Type {
     ConstructTree,
     AckTree,
+    NakTree,
     RecoverPropose,
     AckRecover,
     RecoverCommit,
@@ -28,6 +30,7 @@ public:
   union {
     spob::ConstructTree ct_;
     spob::AckTree at_;
+    spob::NakTree nt_;
     spob::RecoverPropose rp_;
     spob::AckRecover ar_;
     spob::RecoverCommit rc_;
