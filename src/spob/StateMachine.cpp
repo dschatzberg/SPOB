@@ -11,6 +11,7 @@ StateMachine::StateMachine(uint32_t rank, CommunicatorInterface& comm,
 {
   count_ = 0;
   last_proposed_mid_ = 0;
+  last_acked_mid_ = 0;
   fd.AddCallback(FDCallbackStatic, reinterpret_cast<void*>(this));
 }
 
@@ -26,15 +27,22 @@ StateMachine::Propose(const std::string& message)
   p_.set_primary(primary_);
   p_.mutable_proposal()->set_mid(current_mid_);
   p_.mutable_proposal()->set_message(message);
+  Propose(p_);
   current_mid_++;
   assert(current_mid_ >> 32 == p_.proposal().mid() >> 32);
+  return p_.proposal().mid();
+}
+
+void
+StateMachine::Propose(const spob::Propose& p)
+{
   for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it =
          children_.begin(); it != children_.end(); ++it) {
-    comm_.Send(p_, it->first);
+    comm_.Send(p, it->first);
   }
   using namespace boost::icl;
-  log_[p_.proposal().mid()] = std::make_pair(message, interval_set<uint32_t>());
-  return p_.proposal().mid();
+  log_[p.proposal().mid()] = std::make_pair(p.proposal().message(), fd_.set());
+  last_proposed_mid_ = p.proposal().mid();
 }
 
 void
@@ -45,6 +53,10 @@ StateMachine::Receive(const spob::ConstructTree& ct, uint32_t from)
   uint32_t new_primary = ct.ancestors(ct.ancestors_size() - 1);
   if (new_primary > primary_ ||
       (new_primary == primary_ && ct.count() >= count_)) {
+    if (boost::icl::contains(fd_.set(), new_primary)) {
+      Recover();
+      return;
+    }
     ancestors_.assign(ct.ancestors().begin(), ct.ancestors().end());
     primary_ = new_primary;
     count_ = ct.count();
@@ -71,23 +83,33 @@ StateMachine::Receive(const spob::NakTree& nt, uint32_t from)
 {
   if (nt.primary() == primary_ && nt.count() == count_) {
     assert(children_.count(from) == 1);
-    count_++;
-    if (primary_ == rank_) {
-      max_rank_ = comm_.size() - 1;
-      ancestors_.clear();
-      ConstructTree(max_rank_);
-    } else {
-      children_.clear();
-      comm_.Send(nt, ancestors_.front());
+    NakTree(&nt);
+  }
+}
+
+void
+StateMachine::NakTree(const spob::NakTree* nt)
+{
+  count_++;
+  if (primary_ == rank_) {
+    ancestors_.clear();
+    ConstructTree(max_rank_);
+  } else {
+    children_.clear();
+    if (nt == NULL) {
+      nt_.set_primary(primary_);
+      nt_.set_count(count_);
+      nt = &nt_;
     }
+    comm_.Send(*nt, ancestors_.front());
   }
 }
 
 void
 StateMachine::Receive(const spob::RecoverPropose& rp, uint32_t from)
 {
-  if (rp.primary() == primary_) {
-    assert(from == ancestors_.front());
+  if (rp.primary() == primary_ && from == ancestors_.front()) {
+    got_propose_ = true;
     LogType::iterator hint;
     switch (rp.type()) {
     case spob::RecoverPropose::DIFF:
@@ -101,16 +123,18 @@ StateMachine::Receive(const spob::RecoverPropose& rp, uint32_t from)
                                                                  interval_set<uint32_t>()
                                                                  )));
         }
+        last_proposed_mid_ = (--rp.proposals().end())->mid();
       }
       break;
     case spob::RecoverPropose::TRUNC:
       log_.erase(log_.upper_bound(rp.last_mid()), log_.end());
+      last_proposed_mid_ = rp.last_mid();
       break;
     }
-    if (children_.size() > 0) {
-      RecoverPropose();
-    } else {
+    if (leaf_) {
       AckRecover();
+    } else {
+      RecoverPropose();
     }
   }
 }
@@ -118,8 +142,7 @@ StateMachine::Receive(const spob::RecoverPropose& rp, uint32_t from)
 void
 StateMachine::Receive(const spob::AckRecover& ar, uint32_t from)
 {
-  if (ar.primary() == primary_) {
-    assert(children_.count(from) == 1);
+  if (ar.primary() == primary_ && children_.count(from)) {
     using namespace boost::icl;
     recover_ack_ += interval<uint32_t>::closed(from, children_[from].first);
     interval_set<uint32_t> set = recover_ack_;
@@ -131,10 +154,42 @@ StateMachine::Receive(const spob::AckRecover& ar, uint32_t from)
 }
 
 void
+StateMachine::Receive(const spob::RecoverReconnect& rr, uint32_t from)
+{
+  if (rr.primary() == primary_) {
+    if (!rr.got_propose()) {
+      rp_.set_primary(primary_);
+      rp_.clear_proposals();
+      if (rr.last_proposed() <= last_proposed_mid_) {
+        rp_.set_type(spob::RecoverPropose::DIFF);
+        for (LogType::const_iterator it = log_.upper_bound(rr.last_proposed());
+             it != log_.end(); ++it) {
+          spob::Entry* ent = rp_.add_proposals();
+          ent->set_mid(it->first);
+          ent->set_message(it->second.first);
+        }
+      } else {
+        rp_.set_type(spob::RecoverPropose::TRUNC);
+        rp_.set_last_mid(last_proposed_mid_);
+      }
+      comm_.Send(rp_, from);
+    } else if (rr.acked()) {
+      using namespace boost::icl;
+      recover_ack_ += interval<uint32_t>::closed(from, rr.max_rank());
+      interval_set<uint32_t> set = recover_ack_;
+      set += fd_.set();
+      if (contains(set, interval<uint32_t>::closed(rank_ + 1, max_rank_))) {
+        AckRecover();
+      }
+    }
+    children_[from] = std::make_pair(rr.max_rank(), rr.last_proposed());
+  }
+}
+
+void
 StateMachine::Receive(const spob::RecoverCommit& rc, uint32_t from)
 {
-  if (rc.primary() == primary_) {
-    assert(from == ancestors_.front());
+  if (rc.primary() == primary_ && from == ancestors_.front()) {
     RecoverCommit();
     sf_(cb_data_, FOLLOWING, primary_);
   }
@@ -143,70 +198,68 @@ StateMachine::Receive(const spob::RecoverCommit& rc, uint32_t from)
 void
 StateMachine::Receive(const spob::Propose& p, uint32_t from)
 {
-  if (p.primary() == primary_) {
-    assert(from == ancestors_.front());
-    for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it =
-           children_.begin(); it != children_.end(); ++it) {
-      comm_.Send(p, it->first);
-    }
-    using namespace boost::icl;
-    log_[p.proposal().mid()] = std::make_pair(p.proposal().message(),
-                                              interval_set<uint32_t>());
-    if (children_.size() == 0) {
+  if (p.primary() == primary_ && from == ancestors_.front()) {
+    Propose(p);
+    if (leaf_) {
       a_.set_primary(primary_);
       a_.set_mid(p.proposal().mid());
-      comm_.Send(a_, ancestors_.front());
+      Ack(a_);
     }
   }
 }
 
 void
+StateMachine::Ack(const spob::Ack& a)
+{
+  comm_.Send(a, ancestors_.front());
+  last_acked_mid_ = a.mid();
+}
+
+void
 StateMachine::Receive(const spob::Ack& a, uint32_t from)
 {
-  if (a.primary() == primary_) {
-    assert(children_.count(from) == 1);
+  if (a.primary() == primary_ && children_.count(from)) {
     assert(log_.count(a.mid()) == 1);
     using namespace boost::icl;
     log_[a.mid()].second += interval<uint32_t>::closed(from, children_[from].first);
-    interval_set<uint32_t> set = log_[a.mid()].second;
-    set += fd_.set();
-    if (contains(set, interval<uint32_t>::closed(rank_ + 1, max_rank_))) {
+    if (contains(log_[a.mid()].second,
+                 interval<uint32_t>::closed(rank_ + 1, max_rank_))) {
       if (rank_ == primary_) {
         //commit
         c_.set_primary(primary_);
         c_.set_mid(a.mid());
-        for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it =
-               children_.begin(); it != children_.end(); ++it) {
-          comm_.Send(c_, it->first);
-        }
-        df_(cb_data_, a.mid(), log_[a.mid()].first);
-        log_.erase(log_.begin());
+        Commit(c_);
       } else {
-        comm_.Send(a, ancestors_.front());
+        Ack(a);
       }
     }
   }
 }
 
 void
+StateMachine::Commit(const spob::Commit& c)
+{
+  for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it =
+         children_.begin(); it != children_.end(); ++it) {
+    comm_.Send(c, it->first);
+  }
+  df_(cb_data_, c.mid(), log_[c.mid()].first);
+  log_.erase(log_.begin());
+}
+
+void
 StateMachine::Receive(const spob::Commit& c, uint32_t from)
 {
-  if (c.primary() == primary_) {
-    assert(from == ancestors_.front());
-    for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it =
-           children_.begin(); it != children_.end(); ++it) {
-      comm_.Send(c, it->first);
-    }
-    df_(cb_data_, c.mid(), log_[c.mid()].first);
-    log_.erase(log_.begin());
+  if (c.primary() == primary_ && from == ancestors_.front()) {
+    Commit(c);
   }
 }
 
 void
 StateMachine::Recover()
 {
-  recovering_ = true;
-  constructing_ = true;
+  children_.clear();
+  count_ = 0;
   // If the set of failed processes contains the set of processes
   // with lower rank than me, then I am the lowest ranked correct process
   using namespace boost::icl;
@@ -214,7 +267,6 @@ StateMachine::Recover()
   lower -= fd_.set();
   primary_ = first(lower);
   if (primary_ == rank_) {
-    count_ = 0;
     max_rank_ = comm_.size() - 1;
     ancestors_.clear();
     ConstructTree(max_rank_);
@@ -225,10 +277,13 @@ StateMachine::Recover()
 void
 StateMachine::ConstructTree(uint32_t max_rank)
 {
+  got_propose_ = false;
+  acked_ = false;
   tree_acks_ = 0;
   children_.clear();
   if (max_rank <= rank_) {
     //no tree needs to be constructed
+    leaf_ = true;
     AckTree();
     return;
   }
@@ -238,9 +293,11 @@ StateMachine::ConstructTree(uint32_t max_rank)
   range -= fd_.set();
   if (cardinality(range) == 0) {
     //no tree needs to be constructed
+    leaf_ = true;
     AckTree();
     return;
   }
+  leaf_ = false;
   //left child is next lowest rank above ours
   uint32_t left_child = first(range);
 
@@ -325,6 +382,8 @@ StateMachine::RecoverPropose()
 void
 StateMachine::AckRecover()
 {
+  acked_ = true;
+  last_acked_mid_ = last_proposed_mid_;
   if (rank_ == primary_) {
     RecoverCommit();
     current_mid_ = ((last_proposed_mid_ >> 32) + 1) << 32;
@@ -358,18 +417,15 @@ StateMachine::FDCallback(uint32_t rank)
   if (rank == primary_) {
     Recover();
   } else if (constructing_ && children_.count(rank)) {
-    count_++;
-    if (rank_ == primary_) {
-      ConstructTree(max_rank_);
-    } else {
-      children_.clear();
-      nt_.set_primary(primary_);
-      nt_.set_count(count_);
-      comm_.Send(nt_, ancestors_.front());
-    }
+    NakTree(NULL);
   } else if (!constructing_) {
     if (rank_ < rank && rank <= max_rank_) {
       children_.erase(rank);
+      if (contains(fd_.set(),
+                   boost::icl::interval<uint32_t>::closed(rank_ + 1,
+                                                          max_rank_))) {
+        leaf_ = true;
+      }
       if (recovering_) {
         boost::icl::interval_set<uint32_t> set = recover_ack_;
         set += fd_.set();
@@ -379,11 +435,41 @@ StateMachine::FDCallback(uint32_t rank)
           AckRecover();
         }
       } else {
-        throw std::runtime_error("Descendent in subtree failed: Unimplemented");
+        for (LogType::iterator it = log_.begin();
+             it != log_.end(); ++it) {
+          it->second.second += rank;
+          if (contains(it->second.second,
+                       boost::icl::interval<uint32_t>::closed(rank_ + 1,
+                                                              max_rank_))) {
+            if (rank_ == primary_) {
+              c_.set_primary(primary_);
+              c_.set_mid(it->first);
+              Commit(c_);
+            } else {
+              a_.set_primary(primary_);
+              a_.set_mid(it->first);
+              Ack(a_);
+            }
+          }
+        }
       }
-    }
-    if (ancestors_.front() == rank) {
-      throw std::runtime_error("Parent failed in a constructed Tree: Unimplemented");
+    } else if (ancestors_.front() == rank) {
+      if (recovering_) {
+        for (std::list<uint32_t>::iterator it = ++(ancestors_.begin());
+             it != ancestors_.end(); ++it) {
+          if (!boost::icl::contains(fd_.set(), *it)) {
+            rr_.set_primary(primary_);
+            rr_.set_max_rank(max_rank_);
+            rr_.set_got_propose(got_propose_);
+            rr_.set_acked(acked_);
+            comm_.Send(rr_, *it);
+            ancestors_.erase(ancestors_.begin(), it);
+            break;
+          }
+        }
+      } else {
+        throw std::runtime_error("Parent failed in a constructed Tree: Unimplemented");
+      }
     }
   }
 }

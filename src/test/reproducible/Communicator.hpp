@@ -14,6 +14,7 @@ public:
   void Send(const spob::NakTree& nt, uint32_t to);
   void Send(const spob::RecoverPropose& rp, uint32_t to);
   void Send(const spob::AckRecover& ar, uint32_t to);
+  void Send(const spob::RecoverReconnect& rr, uint32_t to);
   void Send(const spob::RecoverCommit& rc, uint32_t to);
   void Send(const spob::Propose& p, uint32_t to);
   void Send(const spob::Ack& a, uint32_t to);

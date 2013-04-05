@@ -10,9 +10,9 @@ typedef boost::coroutines::coroutine<void()> coroutine_t;
 
 int main (int argc, char* argv[])
 {
-  if (argc < 4) {
+  if (argc < 6) {
     std::cerr << "Usage: " << argv[0] << " num_processes num_messages"
-      " failure_probability seed" << std::endl;
+      " propose_probability failure_probability seed" << std::endl;
     return -1;
   }
 
@@ -28,13 +28,19 @@ int main (int argc, char* argv[])
     return -1;
   }
 
-  double failure_probability = strtod(argv[3], NULL);
+  double propose_probability = strtod(argv[3], NULL);
+  if (propose_probability < 0 || propose_probability > 1) {
+    std::cerr << "Invalid propose probability" << std::endl;
+    return -1;
+  }
+
+  double failure_probability = strtod(argv[4], NULL);
   if (failure_probability < 0 || failure_probability > 1) {
     std::cerr << "Invalid failure probability" << std::endl;
     return -1;
   }
 
-  long int seed = strtol(argv[4], NULL, 10);
+  long int seed = strtol(argv[5], NULL, 10);
   if (seed < 0) {
     std::cerr << "Invalid seed" << std::endl;
     return -1;
@@ -42,8 +48,10 @@ int main (int argc, char* argv[])
   std::default_random_engine rng(seed);
   std::vector<Coroutine*> coroutine_info(num_processes);
   std::set<Coroutine*> runnable;
+  int num_proposals = 0;
   for (int i = 0; i < num_processes; ++i) {
-    coroutine_info[i] = new Coroutine(coroutine_info, runnable, i, num_processes, rng);
+    coroutine_info[i] = new Coroutine(coroutine_info, runnable, i, num_processes, rng,
+                                      propose_probability, num_proposals, num_messages);
   }
 
   std::vector<Coroutine*> alive(coroutine_info);
@@ -68,7 +76,7 @@ int main (int argc, char* argv[])
 #endif
       alive[next]->Fail();
       alive.erase(alive.begin()+next);
-      for (int i = 0; i < alive.size(); i++) {
+      for (unsigned i = 0; i < alive.size(); i++) {
         alive[i]->Failure(rank);
       }
       runnable.insert(alive.begin(), alive.end());
@@ -77,7 +85,7 @@ int main (int argc, char* argv[])
       uint32_t next = dist(rng);
 
       std::set<Coroutine*>::const_iterator it = runnable.begin();
-      for (int i = 0; i < next; ++i) {
+      for (uint32_t i = 0; i < next; ++i) {
         ++it;
       }
       coroutines[(*it)->rank_]();

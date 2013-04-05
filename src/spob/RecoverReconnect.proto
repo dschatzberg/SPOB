@@ -1,0 +1,9 @@
+package spob;
+
+message RecoverReconnect {
+  required uint32 primary = 1;
+  required uint32 max_rank = 2;
+  required uint64 last_proposed = 3;
+  required bool got_propose = 4;
+  required bool acked = 5;
+};

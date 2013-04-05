@@ -14,11 +14,14 @@
 class Coroutine {
 public:
   Coroutine(std::vector<Coroutine*>& coroutines, std::set<Coroutine*>& runnable,
-            uint32_t rank, uint32_t size, std::default_random_engine& rng);
+            uint32_t rank, uint32_t size, std::default_random_engine& rng,
+            double p_propose, int& num_proposals, int max_proposals);
   void operator()(boost::coroutines::coroutine<void()>::caller_type& ca);
 
   void Fail();
   void Failure(uint32_t rank);
+  void Deliver(uint64_t id, const std::string& message);
+  void Status(spob::StateMachine::Status status, uint32_t primary);
   static void Deliver(void* data, uint64_t id, const std::string& message);
   static void Status(void* data, spob::StateMachine::Status status,
                      uint32_t primary);
@@ -32,5 +35,9 @@ public:
   boost::coroutines::coroutine<void()>::caller_type* ca_;
   uint32_t rank_;
   bool failed_;
+  bool primary_;
   std::default_random_engine& rng_;
+  std::bernoulli_distribution dist_prop_;
+  int max_proposals_;
+  int& num_proposals_;
 };

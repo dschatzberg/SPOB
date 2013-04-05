@@ -16,6 +16,7 @@
 #include "spob/Propose.pb.h"
 #include "spob/RecoverCommit.pb.h"
 #include "spob/RecoverPropose.pb.h"
+#include "spob/RecoverReconnect.pb.h"
 
 namespace spob {
   class CommunicatorInterface {
@@ -26,6 +27,7 @@ namespace spob {
     virtual void Send(const RecoverPropose& rp, uint32_t to) = 0;
     virtual void Send(const AckRecover& ar, uint32_t to) = 0;
     virtual void Send(const RecoverCommit& rc, uint32_t to) = 0;
+    virtual void Send(const RecoverReconnect& rr, uint32_t to) = 0;
     virtual void Send(const Propose& p, uint32_t to) = 0;
     virtual void Send(const Ack& a, uint32_t to) = 0;
     virtual void Send(const Commit& c, uint32_t to) = 0;
@@ -64,6 +66,7 @@ namespace spob {
     void Receive(const spob::RecoverPropose& rp, uint32_t from);
     void Receive(const spob::AckRecover& ar, uint32_t from);
     void Receive(const spob::RecoverCommit& rc, uint32_t from);
+    void Receive(const spob::RecoverReconnect& rr, uint32_t from);
     void Receive(const spob::Propose& p, uint32_t from);
     void Receive(const spob::Ack& a, uint32_t from);
     void Receive(const spob::Commit& c, uint32_t from);
@@ -71,10 +74,13 @@ namespace spob {
     void Recover();
     void ConstructTree(uint32_t max_rank);
     void AckTree();
+    void NakTree(const spob::NakTree* nt);
     void RecoverPropose();
     void AckRecover();
     void RecoverCommit();
-    void Ack(uint64_t id);
+    void Propose(const spob::Propose& p);
+    void Ack(const spob::Ack& a);
+    void Commit(const spob::Commit& c);
     void FDCallback(uint32_t rank);
 
     static void FDCallbackStatic(void* data, uint32_t rank);
@@ -90,9 +96,13 @@ namespace spob {
     uint64_t count_;
     uint32_t max_rank_;
     uint64_t last_proposed_mid_;
+    uint64_t last_acked_mid_;
     uint64_t current_mid_;
     bool constructing_;
     bool recovering_;
+    bool leaf_;
+    bool got_propose_;
+    bool acked_;
     unsigned int tree_acks_;
     std::list<uint32_t> ancestors_;
     std::map<uint32_t, std::pair<uint32_t, uint64_t> > children_;
@@ -107,6 +117,7 @@ namespace spob {
     spob::RecoverPropose rp_;
     spob::AckRecover ar_;
     spob::RecoverCommit rc_;
+    spob::RecoverReconnect rr_;
     spob::Propose p_;
     spob::Ack a_;
     spob::Commit c_;

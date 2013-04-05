@@ -10,6 +10,7 @@ public:
   Message(uint32_t from, spob::NakTree nt);
   Message(uint32_t from, spob::RecoverPropose rp);
   Message(uint32_t from, spob::AckRecover ar);
+  Message(uint32_t from, spob::RecoverReconnect rr);
   Message(uint32_t from, spob::RecoverCommit rc);
   Message(uint32_t from, spob::Propose p);
   Message(uint32_t from, spob::Ack a);
@@ -20,6 +21,7 @@ public:
     NakTree,
     RecoverPropose,
     AckRecover,
+    RecoverReconnect,
     RecoverCommit,
     Propose,
     Ack,
@@ -33,6 +35,7 @@ public:
     spob::NakTree nt_;
     spob::RecoverPropose rp_;
     spob::AckRecover ar_;
+    spob::RecoverReconnect rr_;
     spob::RecoverCommit rc_;
     spob::Propose p_;
     spob::Ack a_;

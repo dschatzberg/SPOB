@@ -83,6 +83,21 @@ Communicator::Send(const spob::AckRecover& ar, uint32_t to)
   c_.runnable_.erase(&c_);
 }
 void
+Communicator::Send(const spob::RecoverReconnect& rr, uint32_t to)
+{
+#ifdef LOG
+  std::cout << rank_ << ": Sending RecoverReconnect to " << to <<
+    ": " << rr.ShortDebugString() << std::endl;
+#endif
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, rr);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
+  c_.runnable_.insert(&c_);
+  (*(c_.ca_))();
+  c_.runnable_.erase(&c_);
+}
+void
 Communicator::Send(const spob::RecoverCommit& rc, uint32_t to)
 {
 #ifdef LOG

@@ -24,6 +24,10 @@ Message::Message(uint32_t from, spob::AckRecover ar) :
   type_(AckRecover), from_(from), ar_(ar)
 {
 }
+Message::Message(uint32_t from, spob::RecoverReconnect rr) :
+  type_(RecoverReconnect), from_(from), rr_(rr)
+{
+}
 Message::Message(uint32_t from, spob::RecoverCommit rc) :
   type_(RecoverCommit), from_(from), rc_(rc)
 {
@@ -58,6 +62,9 @@ Message::~Message()
     break;
   case AckRecover:
     ar_.~AckRecover();
+    break;
+  case RecoverReconnect:
+    rr_.~RecoverReconnect();
     break;
   case RecoverCommit:
     rc_.~RecoverCommit();

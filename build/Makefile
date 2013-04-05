@@ -13,6 +13,7 @@ LIBSPOB_SRCFILES := \
 	spob/Propose.pb.cc \
 	spob/RecoverCommit.pb.cc \
 	spob/RecoverPropose.pb.cc \
+	spob/RecoverReconnect.pb.cc \
 	spob/StateMachine.cpp
 
 LIBSPOB_HDRFILES := \
@@ -26,7 +27,8 @@ LIBSPOB_HDRFILES := \
 	spob/NakTree.pb.h \
 	spob/Propose.pb.h \
 	spob/RecoverCommit.pb.h \
-	spob/RecoverPropose.pb.h
+	spob/RecoverPropose.pb.h \
+	spob/RecoverReconnect.pb.h
 
 LIBSPOB_OBJFILES := $(patsubst %.cc, %.o, \
 	$(patsubst %.cpp, %.o, $(LIBSPOB_SRCFILES)))
