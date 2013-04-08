@@ -15,6 +15,8 @@ public:
   Message(uint32_t from, spob::Propose p);
   Message(uint32_t from, spob::Ack a);
   Message(uint32_t from, spob::Commit c);
+  Message(uint32_t from, spob::Reconnect r);
+  Message(uint32_t from, spob::ReconnectResponse recon_resp);
   enum Type {
     ConstructTree,
     AckTree,
@@ -25,7 +27,9 @@ public:
     RecoverCommit,
     Propose,
     Ack,
-    Commit
+    Commit,
+    Reconnect,
+    ReconnectResponse
   };
   Type type_;
   uint32_t from_;
@@ -40,6 +44,8 @@ public:
     spob::Propose p_;
     spob::Ack a_;
     spob::Commit c_;
+    spob::Reconnect r_;
+    spob::ReconnectResponse recon_resp_;
   };
   ~Message();
 };

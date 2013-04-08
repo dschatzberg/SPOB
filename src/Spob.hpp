@@ -14,6 +14,8 @@
 #include "spob/ConstructTree.pb.h"
 #include "spob/NakTree.pb.h"
 #include "spob/Propose.pb.h"
+#include "spob/Reconnect.pb.h"
+#include "spob/ReconnectResponse.pb.h"
 #include "spob/RecoverCommit.pb.h"
 #include "spob/RecoverPropose.pb.h"
 #include "spob/RecoverReconnect.pb.h"
@@ -31,6 +33,8 @@ namespace spob {
     virtual void Send(const Propose& p, uint32_t to) = 0;
     virtual void Send(const Ack& a, uint32_t to) = 0;
     virtual void Send(const Commit& c, uint32_t to) = 0;
+    virtual void Send(const Reconnect& r, uint32_t to) = 0;
+    virtual void Send(const ReconnectResponse& recon_resp, uint32_t to) = 0;
     virtual uint32_t size() const = 0;
 
     virtual ~CommunicatorInterface() {}
@@ -70,6 +74,8 @@ namespace spob {
     void Receive(const spob::Propose& p, uint32_t from);
     void Receive(const spob::Ack& a, uint32_t from);
     void Receive(const spob::Commit& c, uint32_t from);
+    void Receive(const spob::Reconnect& r, uint32_t from);
+    void Receive(const spob::ReconnectResponse& recon_resp, uint32_t from);
   private:
     void Recover();
     void ConstructTree(uint32_t max_rank);
@@ -97,6 +103,7 @@ namespace spob {
     uint32_t max_rank_;
     uint64_t last_proposed_mid_;
     uint64_t last_acked_mid_;
+    uint64_t last_committed_mid_;
     uint64_t current_mid_;
     bool constructing_;
     bool recovering_;
@@ -121,6 +128,8 @@ namespace spob {
     spob::Propose p_;
     spob::Ack a_;
     spob::Commit c_;
+    spob::Reconnect r_;
+    spob::ReconnectResponse recon_resp_;
   };
 
 }

@@ -119,6 +119,20 @@ Coroutine::operator()(boost::coroutines::coroutine<void()>::caller_type& ca)
 #endif
         sm_.Receive(m.c_, m.from_);
         break;
+      case Message::Reconnect:
+#ifdef LOG
+        std::cout << rank_ << ": Received Reconnect from " <<
+          m.from_ << ": " << m.r_.ShortDebugString() << std::endl;
+#endif
+        sm_.Receive(m.r_, m.from_);
+        break;
+      case Message::ReconnectResponse:
+#ifdef LOG
+        std::cout << rank_ << ": Received ReconnectResponse from " <<
+          m.from_ << ": " << m.recon_resp_.ShortDebugString() << std::endl;
+#endif
+        sm_.Receive(m.recon_resp_, m.from_);
+        break;
       }
       queue_.pop();
     }

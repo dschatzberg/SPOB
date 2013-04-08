@@ -19,6 +19,8 @@ public:
   void Send(const spob::Propose& p, uint32_t to);
   void Send(const spob::Ack& a, uint32_t to);
   void Send(const spob::Commit& c, uint32_t to);
+  void Send(const spob::Reconnect& r, uint32_t to);
+  void Send(const spob::ReconnectResponse& recon_resp, uint32_t to);
   uint32_t size() const;
 private:
   Coroutine& c_;

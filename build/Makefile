@@ -11,6 +11,8 @@ LIBSPOB_SRCFILES := \
 	spob/Entry.pb.cc \
 	spob/NakTree.pb.cc \
 	spob/Propose.pb.cc \
+	spob/Reconnect.pb.cc \
+	spob/ReconnectResponse.pb.cc \
 	spob/RecoverCommit.pb.cc \
 	spob/RecoverPropose.pb.cc \
 	spob/RecoverReconnect.pb.cc \
@@ -26,6 +28,8 @@ LIBSPOB_HDRFILES := \
 	spob/Entry.pb.h \
 	spob/NakTree.pb.h \
 	spob/Propose.pb.h \
+	spob/Reconnect.pb.h \
+	spob/ReconnectResponse.pb.h \
 	spob/RecoverCommit.pb.h \
 	spob/RecoverPropose.pb.h \
 	spob/RecoverReconnect.pb.h
@@ -57,7 +61,7 @@ REPRODUCIBLE_TEST_SRCFILES := \
 REPRODUCIBLE_TEST_HDRFILES := \
 	test/reproducible/Communicator.hpp \
 	test/reproducible/Coroutine.hpp \
-	test/reproducible/FailuredDetector.hpp \
+	test/reproducible/FailureDetector.hpp \
 	test/reproducible/Message.hpp
 
 REPRODUCIBLE_TEST_OBJFILES := $(patsubst %.cc, %.o, \
@@ -79,17 +83,21 @@ libspob.a: $(LIBSPOB_HDRFILES) $(LIBSPOB_OBJFILES)
 testapp: $(TEST_HDRFILES) $(TEST_OBJFILES)
 	$(MPICXX) $(CXXFLAGS) $(TEST_OBJFILES) $(TEST_LIBS) -o $@
 
-reproducible_test: $(REPRODUCIBLE_TEST_HDFFILES) $(REPRODUCIBLE_TEST_OBJFILES)
+reproducible_test: $(LIBSPOB_HDRFILES) $(REPRODUCIBLE_TEST_HDRFILES) \
+		$(REPRODUCIBLE_TEST_OBJFILES)
 	$(CXX) $(CXXFLAGS) $(REPRODUCIBLE_TEST_OBJFILES) \
 	$(REPRODUCIBLE_TEST_LIBS) -o $@
 
 clean:
 	-$(RM) $(wildcard $(LIBSPOB_OBJFILES) $(LIBSPOB_DEPFILES) \
-	$(TEST_OBJFILES) $(TEST_DEPFILES) testapp libspob.a) \
+	$(TEST_OBJFILES) $(TEST_DEPFILES) $(REPRODUCIBLE_TEST_OBJFILES) \
+	$(REPRODUCIBLE_TEST_DEPFILES) testapp reproducible_test libspob.a) \
 	$(filter %.pb.cc, $(LIBSPOB_SRCFILES)) \
 	$(filter %.pb.h, $(LIBSPOB_HDRFILES)) \
 	$(filter %.pb.cc, $(TEST_SRCFILES)) \
 	$(filter %.pb.h, $(TEST_HDRFILES))
+	$(filter %.pb.cc, $(REPRODUCIBLE_TEST_SRCFILES)) \
+	$(filter %.pb.h, $(REPRODUCIBLE_TEST_HDRFILES))
 
 -include $(LIBSPOB_DEPFILES)
 -include $(TEST_DEPFILES)

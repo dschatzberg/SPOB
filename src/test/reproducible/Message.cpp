@@ -44,6 +44,14 @@ Message::Message(uint32_t from, spob::Commit c) :
   type_(Commit), from_(from), c_(c)
 {
 }
+Message::Message(uint32_t from, spob::Reconnect r) :
+  type_(Reconnect), from_(from), r_(r)
+{
+}
+Message::Message(uint32_t from, spob::ReconnectResponse recon_resp) :
+  type_(ReconnectResponse), from_(from), recon_resp_(recon_resp)
+{
+}
 
 Message::~Message()
 {
@@ -77,6 +85,12 @@ Message::~Message()
     break;
   case Commit:
     c_.~Commit();
+    break;
+  case Reconnect:
+    r_.~Reconnect();
+    break;
+  case ReconnectResponse:
+    recon_resp_.~ReconnectResponse();
     break;
   }
 }

@@ -12,6 +12,7 @@ StateMachine::StateMachine(uint32_t rank, CommunicatorInterface& comm,
   count_ = 0;
   last_proposed_mid_ = 0;
   last_acked_mid_ = 0;
+  last_committed_mid_ = 0;
   fd.AddCallback(FDCallbackStatic, reinterpret_cast<void*>(this));
 }
 
@@ -245,6 +246,7 @@ StateMachine::Commit(const spob::Commit& c)
   }
   df_(cb_data_, c.mid(), log_[c.mid()].first);
   log_.erase(log_.begin());
+  last_committed_mid_ = c.mid();
 }
 
 void
@@ -252,6 +254,73 @@ StateMachine::Receive(const spob::Commit& c, uint32_t from)
 {
   if (c.primary() == primary_ && from == ancestors_.front()) {
     Commit(c);
+  }
+}
+
+void
+StateMachine::Receive(const spob::Reconnect& r, uint32_t from)
+{
+  if (r.primary() == primary_) {
+    assert(rank_ < from && from <= max_rank_);
+    recon_resp_.set_primary(primary_);
+    recon_resp_.set_last_committed(last_committed_mid_);
+    for (LogType::const_iterator it = log_.upper_bound(r.last_proposed());
+         it != log_.end(); ++it) {
+      spob::Entry* ent = recon_resp_.add_proposals();
+      ent->set_mid(it->first);
+      ent->set_message(it->second.first);
+    }
+    comm_.Send(recon_resp_, from);
+    for (LogType::iterator it = log_.upper_bound(last_acked_mid_);
+         it != log_.upper_bound(r.last_acked()); ++it) {
+      using namespace boost::icl;
+      it->second.second += interval<uint32_t>::closed(from, r.max_rank());
+      if (contains(it->second.second,
+                   interval<uint32_t>::closed(rank_ + 1, max_rank_))) {
+        if (rank_ == primary_) {
+          c_.set_primary(primary_);
+          c_.set_mid(it->first);
+          Commit(c_);
+        } else {
+          a_.set_primary(primary_);
+          a_.set_mid(it->first);
+          Ack(a_);
+        }
+      }
+    }
+    children_[from] = std::make_pair(r.max_rank(), r.last_proposed());
+  }
+}
+
+void
+StateMachine::Receive(const spob::ReconnectResponse& recon_resp, uint32_t from)
+{
+  if (recon_resp.primary() == primary_ && from == ancestors_.front()) {
+    for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it
+           = children_.begin();
+         it != children_.end(); ++it) {
+      comm_.Send(recon_resp, it->first);
+    }
+    for (LogType::const_iterator it = log_.begin();
+         it != log_.upper_bound(recon_resp.last_committed()); ++it) {
+      df_(cb_data_, it->first, it->second.first);
+    }
+    log_.erase(log_.begin(), log_.upper_bound(recon_resp.last_committed()));
+    last_committed_mid_ = recon_resp.last_committed();
+    if (recon_resp.proposals().size() > 0) {
+      LogType::iterator hint;
+      hint = --log_.end();
+      for (google::protobuf::RepeatedPtrField<spob::Entry>::const_iterator it =
+             recon_resp.proposals().begin();
+           it != recon_resp.proposals().end(); ++it) {
+        using namespace boost::icl;
+        hint = log_.insert(hint, std::make_pair(it->mid(),
+                                                std::make_pair(it->message(),
+                                                               interval_set<uint32_t>()
+                                                               )));
+      }
+      last_proposed_mid_ = (--recon_resp.proposals().end())->mid();
+    }
   }
 }
 
@@ -435,7 +504,7 @@ StateMachine::FDCallback(uint32_t rank)
           AckRecover();
         }
       } else {
-        for (LogType::iterator it = log_.begin();
+        for (LogType::iterator it = log_.upper_bound(last_acked_mid_);
              it != log_.end(); ++it) {
           it->second.second += rank;
           if (contains(it->second.second,
@@ -454,21 +523,25 @@ StateMachine::FDCallback(uint32_t rank)
         }
       }
     } else if (ancestors_.front() == rank) {
-      if (recovering_) {
-        for (std::list<uint32_t>::iterator it = ++(ancestors_.begin());
-             it != ancestors_.end(); ++it) {
-          if (!boost::icl::contains(fd_.set(), *it)) {
+      for (std::list<uint32_t>::iterator it = ++(ancestors_.begin());
+           it != ancestors_.end(); ++it) {
+        if (!boost::icl::contains(fd_.set(), *it)) {
+          if (recovering_) {
             rr_.set_primary(primary_);
             rr_.set_max_rank(max_rank_);
             rr_.set_got_propose(got_propose_);
             rr_.set_acked(acked_);
             comm_.Send(rr_, *it);
-            ancestors_.erase(ancestors_.begin(), it);
-            break;
+          } else {
+            r_.set_primary(primary_);
+            r_.set_max_rank(max_rank_);
+            r_.set_last_proposed(last_proposed_mid_);
+            r_.set_last_acked(last_acked_mid_);
+            comm_.Send(r_, *it);
           }
+          ancestors_.erase(ancestors_.begin(), it);
+          break;
         }
-      } else {
-        throw std::runtime_error("Parent failed in a constructed Tree: Unimplemented");
       }
     }
   }

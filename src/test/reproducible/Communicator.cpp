@@ -157,6 +157,36 @@ Communicator::Send(const spob::Commit& c, uint32_t to)
   (*(c_.ca_))();
   c_.runnable_.erase(&c_);
 }
+void
+Communicator::Send(const spob::Reconnect& r, uint32_t to)
+{
+#ifdef LOG
+  std::cout << rank_ << ": Sending Reconnect to " << to <<
+    ": " << r.ShortDebugString() << std::endl;
+#endif
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, r);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
+  c_.runnable_.insert(&c_);
+  (*(c_.ca_))();
+  c_.runnable_.erase(&c_);
+}
+void
+Communicator::Send(const spob::ReconnectResponse& recon_resp, uint32_t to)
+{
+#ifdef LOG
+  std::cout << rank_ << ": Sending ReconnectResponse to " << to <<
+    ": " << recon_resp.ShortDebugString() << std::endl;
+#endif
+  if (!c_.coroutines_[to]->failed_) {
+    c_.coroutines_[to]->queue_.emplace(rank_, recon_resp);
+    c_.runnable_.insert(c_.coroutines_[to]);
+  }
+  c_.runnable_.insert(&c_);
+  (*(c_.ca_))();
+  c_.runnable_.erase(&c_);
+}
 
 uint32_t
 Communicator::size() const
