@@ -1,6 +1,6 @@
 package spob;
 
-import "spob/Entry.proto";
+import "Entry.proto";
 
 message Propose {
   required uint32 primary = 1;

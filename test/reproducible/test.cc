@@ -4,7 +4,7 @@
 
 #include <boost/coroutine/all.hpp>
 
-#include "test/reproducible/Coroutine.hpp"
+#include "Coroutine.h"
 
 typedef boost::coroutines::coroutine<void()> coroutine_t;
 

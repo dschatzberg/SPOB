@@ -6,10 +6,10 @@
 
 #include <boost/coroutine/all.hpp>
 
-#include "Communicator.hpp"
-#include "FailureDetector.hpp"
-#include "Message.hpp"
-#include "Spob.hpp"
+#include "Communicator.h"
+#include "FailureDetector.h"
+#include "Message.h"
+#include "Spob.h"
 
 class Coroutine {
 public:

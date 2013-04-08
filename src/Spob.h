@@ -7,18 +7,18 @@
 
 #include <boost/icl/interval_set.hpp>
 
-#include "spob/Ack.pb.h"
-#include "spob/AckRecover.pb.h"
-#include "spob/AckTree.pb.h"
-#include "spob/Commit.pb.h"
-#include "spob/ConstructTree.pb.h"
-#include "spob/NakTree.pb.h"
-#include "spob/Propose.pb.h"
-#include "spob/Reconnect.pb.h"
-#include "spob/ReconnectResponse.pb.h"
-#include "spob/RecoverCommit.pb.h"
-#include "spob/RecoverPropose.pb.h"
-#include "spob/RecoverReconnect.pb.h"
+#include "Ack.pb.h"
+#include "AckRecover.pb.h"
+#include "AckTree.pb.h"
+#include "Commit.pb.h"
+#include "ConstructTree.pb.h"
+#include "NakTree.pb.h"
+#include "Propose.pb.h"
+#include "Reconnect.pb.h"
+#include "ReconnectResponse.pb.h"
+#include "RecoverCommit.pb.h"
+#include "RecoverPropose.pb.h"
+#include "RecoverReconnect.pb.h"
 
 namespace spob {
   class CommunicatorInterface {

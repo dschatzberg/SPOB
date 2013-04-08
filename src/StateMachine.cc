@@ -1,4 +1,4 @@
-#include "Spob.hpp"
+#include "Spob.h"
 
 using namespace spob;
 
@@ -369,7 +369,7 @@ StateMachine::ConstructTree(uint32_t max_rank)
   uint32_t left_child = first(range);
 
   //right child is the median process in our subtree
-  uint32_t right_child;
+  uint32_t right_child = 0;
   uint32_t pos = cardinality(range) / 2;
   for (interval_set<uint32_t>::const_iterator it = range.begin();
        it != range.end(); ++it) {

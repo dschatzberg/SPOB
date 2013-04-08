@@ -1,0 +1,2 @@
+#define Spob_VERSION_MAJOR @Spob_VERSION_MAJOR@
+#define Spob_VERSION_MINOR @Spob_VERSION_MINOR@

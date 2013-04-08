@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Spob.hpp"
+#include "Spob.h"
 
 class Message {
 public:

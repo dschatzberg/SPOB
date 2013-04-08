@@ -1,6 +1,6 @@
 package spob;
 
-import "spob/Entry.proto";
+import "Entry.proto";
 
 message RecoverPropose {
   required uint32 primary = 1;

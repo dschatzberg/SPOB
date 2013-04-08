@@ -1,6 +1,6 @@
-#include "test/reproducible/Communicator.hpp"
-#include "test/reproducible/Coroutine.hpp"
-#include "test/reproducible/Message.hpp"
+#include "Communicator.h"
+#include "Coroutine.h"
+#include "Message.h"
 
 Communicator::Communicator(Coroutine& c, uint32_t rank, uint32_t size)
   : c_(c), rank_(rank), size_(size)

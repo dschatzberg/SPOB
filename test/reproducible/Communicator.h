@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "Spob.hpp"
+#include "Spob.h"
 
 class Coroutine;
 

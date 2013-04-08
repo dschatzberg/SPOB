@@ -1,4 +1,4 @@
-#include "test/reproducible/FailureDetector.hpp"
+#include "FailureDetector.h"
 
 FailureDetector::FailureDetector()
 {

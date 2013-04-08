@@ -1,7 +1,7 @@
 #include <boost/mpi.hpp>
 #include <boost/serialization/string.hpp>
 
-#include "Spob.hpp"
+#include "Spob.h"
 
 namespace mpi = boost::mpi;
 

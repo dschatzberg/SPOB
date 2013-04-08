@@ -1,4 +1,4 @@
-#include "test/reproducible/Message.hpp"
+#include "Message.h"
 
 Message::Message() : type_(ConstructTree), ct_()
 {
