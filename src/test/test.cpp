@@ -12,7 +12,7 @@ namespace {
 class Callback {
 public:
   Callback(spob::StateMachine** sm, long int num_messages)
-    : sm_(sm), n_(num_messages)
+    : n_(num_messages), sm_(sm)
   {
     mpi::communicator world;
     rank_ = world.rank();
@@ -80,12 +80,16 @@ public:
   enum MessageType {
     ConstructTree,
     AckTree,
+    NakTree,
     RecoverPropose,
     AckRecover,
+    RecoverReconnect,
     RecoverCommit,
     Propose,
     Ack,
-    Commit
+    Commit,
+    Reconnect,
+    ReconnectResponse
   };
 
   void Send(const spob::ConstructTree& ct, uint32_t to)
@@ -117,6 +121,21 @@ public:
     Send(to, AckTree, str);
   }
 
+  void Send(const spob::NakTree& nt, uint32_t to)
+  {
+#ifdef LOG
+    std::cout << rank_ << ": Sending NakTree to " << to <<
+      ": " << nt.ShortDebugString() << std::endl;
+#endif
+
+    std::string str;
+    if (!nt.SerializeToString(&str)) {
+      throw std::runtime_error("Failed to serialized a NakTree");
+    }
+
+    Send(to, NakTree, str);
+  }
+
   void Send(const spob::RecoverPropose& rp, uint32_t to)
   {
 #ifdef LOG
@@ -145,6 +164,21 @@ public:
     }
 
     Send(to, AckRecover, str);
+  }
+
+  void Send(const spob::RecoverReconnect& rr, uint32_t to)
+  {
+#ifdef LOG
+    std::cout << rank_ << ": Sending RecoverReconnect to " << to <<
+      ": " << rr.ShortDebugString() << std::endl;
+#endif
+
+    std::string str;
+    if (!rr.SerializeToString(&str)) {
+      throw std::runtime_error("Failed to serialized a RecoverReconnect");
+    }
+
+    Send(to, RecoverReconnect, str);
   }
 
   void Send(const spob::RecoverCommit& rc, uint32_t to)
@@ -207,18 +241,52 @@ public:
     Send(to, Commit, str);
   }
 
+  void Send(const spob::Reconnect& r, uint32_t to)
+  {
+#ifdef LOG
+    std::cout << rank_ << ": Sending Reconnect to " << to <<
+      ": " << r.ShortDebugString() << std::endl;
+#endif
+
+    std::string str;
+    if (!r.SerializeToString(&str)) {
+      throw std::runtime_error("Failed to serialized a Reconnect");
+    }
+
+    Send(to, Reconnect, str);
+  }
+
+  void Send(const spob::ReconnectResponse& recon_resp, uint32_t to)
+  {
+#ifdef LOG
+    std::cout << rank_ << ": Sending ReconnectResponse to " << to <<
+      ": " << recon_resp.ShortDebugString() << std::endl;
+#endif
+
+    std::string str;
+    if (!recon_resp.SerializeToString(&str)) {
+      throw std::runtime_error("Failed to serialized a ReconnectResponse");
+    }
+
+    Send(to, ReconnectResponse, str);
+  }
+
   void Process()
   {
     boost::optional<mpi::status> opt_status = req_.test();
     if (opt_status) {
       spob::ConstructTree ct;
       spob::AckTree at;
+      spob::NakTree nt;
       spob::RecoverPropose rp;
       spob::AckRecover ar;
+      spob::RecoverReconnect rr;
       spob::RecoverCommit rc;
       spob::Propose p;
       spob::Ack a;
       spob::Commit c;
+      spob::Reconnect r;
+      spob::ReconnectResponse recon_resp;
       switch (static_cast<MessageType>(opt_status->tag())) {
       case ConstructTree:
         if (!ct.ParseFromString(message_)) {
@@ -240,6 +308,16 @@ public:
 #endif
         (*sm_)->Receive(at, opt_status->source());
         break;
+      case NakTree:
+        if (!nt.ParseFromString(message_)) {
+          throw std::runtime_error("Failed to parse NakTree");
+        }
+#ifdef LOG
+        std::cout << rank_ << ": Received NakTree from " <<
+          opt_status->source() << ": " << nt.ShortDebugString() << std::endl;
+#endif
+        (*sm_)->Receive(nt, opt_status->source());
+        break;
       case RecoverPropose:
         if (!rp.ParseFromString(message_)) {
           throw std::runtime_error("Failed to parse RecoverPropose");
@@ -259,6 +337,16 @@ public:
           opt_status->source() << ": " << ar.ShortDebugString() << std::endl;
 #endif
         (*sm_)->Receive(ar, opt_status->source());
+        break;
+      case RecoverReconnect:
+        if (!rr.ParseFromString(message_)) {
+          throw std::runtime_error("Failed to parse RecoverReconnect");
+        }
+#ifdef LOG
+        std::cout << rank_ << ": Received RecoverReconnect from " <<
+          opt_status->source() << ": " << rr.ShortDebugString() << std::endl;
+#endif
+        (*sm_)->Receive(rr, opt_status->source());
         break;
       case RecoverCommit:
         if (!rc.ParseFromString(message_)) {
@@ -299,6 +387,26 @@ public:
           opt_status->source() << ": " << c.ShortDebugString() << std::endl;
 #endif
         (*sm_)->Receive(c, opt_status->source());
+        break;
+      case Reconnect:
+        if (!r.ParseFromString(message_)) {
+          throw std::runtime_error("Failed to parse Reconnect");
+        }
+#ifdef LOG
+        std::cout << rank_ << ": Received Reconnect from " <<
+          opt_status->source() << ": " << r.ShortDebugString() << std::endl;
+#endif
+        (*sm_)->Receive(r, opt_status->source());
+        break;
+      case ReconnectResponse:
+        if (!recon_resp.ParseFromString(message_)) {
+          throw std::runtime_error("Failed to parse ReconnectResponse");
+        }
+#ifdef LOG
+        std::cout << rank_ << ": Received ReconnectResponse from " <<
+          opt_status->source() << ": " << recon_resp.ShortDebugString() << std::endl;
+#endif
+        (*sm_)->Receive(recon_resp, opt_status->source());
         break;
       }
       mpi::communicator world;

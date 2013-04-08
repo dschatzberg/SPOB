@@ -1,5 +1,3 @@
-#include <stdexcept>
-
 #include "Spob.hpp"
 
 using namespace spob;
