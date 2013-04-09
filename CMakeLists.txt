@@ -90,6 +90,7 @@ PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS
 
 add_library(spob src/StateMachine.cc ${PROTO_SRCS} ${PROTO_HDRS})
 
+enable_testing()
 include(CTest)
 
 add_subdirectory(test)
