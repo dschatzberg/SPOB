@@ -1,7 +1,13 @@
+#include "config.h"
+
 #include <boost/mpi.hpp>
 #include <boost/program_options.hpp>
 #include <boost/serialization/string.hpp>
+#if HAVE_PPC450_INLINES_H
+#include <bpcore/ppc450_inlines.h>
+#else
 #include <boost/timer/timer.hpp>
+#endif
 
 #include "Spob.h"
 
@@ -42,7 +48,11 @@ private:
         std::cout << rank_ << ": Recovered and Leading" << std::endl;
       }
       primary_ = primary;
+#if HAVE_PPC450_INLINES_H
+      start_ = _bgp_GetTimeBase();
+#else
       start_ = timer_.elapsed().wall;
+#endif
       (*sm_)->Propose("test");
     } else if (spob::StateMachine::FOLLOWING) {
       primary_ = primary;
@@ -60,10 +70,27 @@ private:
     }
     if (count_ == n_) {
       quit = true;
-      std::cout << "Mean = " << new_mean_ << " nanoseconds, StdDev = " <<
-        std::sqrt(new_square_/(count_ - 1)) << " nanoseconds" << std::endl;
+      if (rank_ == primary_) {
+        std::cout << "Mean = " << new_mean_ << " ";
+#if HAVE_PPC450_INLINES_H
+        std::cout << "cycles";
+#else
+        std::cout << "nanoseconds";
+#endif
+        std::cout << ", StdDev = " << std::sqrt(new_square_/(count_ - 1)) << " ";
+#if HAVE_PPC450_INLINES_H
+        std::cout << "cycles";
+#else
+        std::cout << "nanoseconds";
+#endif
+        std::cout << std::endl;
+      }
     } else if (rank_ == primary_) {
+#if HAVE_PPC450_INLINES_H
+      uint64_t sample = _bgp_GetTimeBase() - start_;
+#else
       boost::timer::nanosecond_type sample = timer_.elapsed().wall - start_;
+#endif
       if (count_ == 1) {
         old_mean_ = new_mean_ = sample;
         old_square_ = 0.0;
@@ -74,6 +101,11 @@ private:
         old_mean_ = new_mean_;
         old_square_ = new_square_;
       }
+#if HAVE_PPC450_INLINES_H
+      start_ = _bgp_GetTimeBase();
+#else
+      start_ = timer_.elapsed().wall;
+#endif
       (*sm_)->Propose("test");
     }
   }
@@ -82,8 +114,12 @@ private:
   long int count_;
   long int n_;
   spob::StateMachine** sm_;
+#if HAVE_PPC450_INLINES_H
+  uint64_t start_;
+#else
   boost::timer::cpu_timer timer_;
   boost::timer::nanosecond_type start_;
+#endif
   double old_mean_;
   double new_mean_;
   double old_square_;

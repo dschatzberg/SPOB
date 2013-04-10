@@ -1,6 +1,8 @@
 cmake_minimum_required (VERSION 2.8.7)
 project (Spob)
 
+include (CheckIncludeFiles)
+
 set (Spob_VERSION_MAJOR 0)
 set (Spob_VERSION_MINOR 1)
 
@@ -65,10 +67,14 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_package( Protobuf REQUIRED)
 include_directories(${PROTOBUF_INCLUDE_DIRS})
 
+include_directories(${CMAKE_SYSTEM_INCLUDE_PATH})
+set(CMAKE_REQUIRED_INCLUDES ${CMAKE_SYSTEM_INCLUDE_PATH})
+check_include_files(bpcore/ppc450_inlines.h HAVE_PPC450_INLINES_H)
 configure_file (
-  "${PROJECT_SOURCE_DIR}/src/SpobConfig.h.in"
-  "${PROJECT_BINARY_DIR}/SpobConfig.h"
+  "${PROJECT_SOURCE_DIR}/config.h.in"
+  "${PROJECT_BINARY_DIR}/config.h"
   )
+
 
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}/src")
