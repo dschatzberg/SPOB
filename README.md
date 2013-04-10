@@ -1,4 +1,4 @@
-spob
+SPOB
 ====
 
 Scalable Primary Order Broadcast
