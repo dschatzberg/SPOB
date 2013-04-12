@@ -1,135 +1,216 @@
 #pragma once
 
-#include <stdint.h>
-
 #include <list>
-#include <string>
+#include <map>
 
 #include <boost/icl/interval_set.hpp>
-
-#include "Ack.pb.h"
-#include "AckRecover.pb.h"
-#include "AckTree.pb.h"
-#include "Commit.pb.h"
-#include "ConstructTree.pb.h"
-#include "NakTree.pb.h"
-#include "Propose.pb.h"
-#include "Reconnect.pb.h"
-#include "ReconnectResponse.pb.h"
-#include "RecoverCommit.pb.h"
-#include "RecoverPropose.pb.h"
-#include "RecoverReconnect.pb.h"
+#include <boost/msm/back/state_machine.hpp>
+#include <boost/msm/front/state_machine_def.hpp>
+#include <boost/msm/front/functor_row.hpp>
+#include <boost/msm/front/euml/common.hpp>
+#include <boost/msm/front/euml/operator.hpp>
 
 namespace spob {
+  //Events
+  struct ConstructTree {
+    std::list<uint32_t> ancestors_;
+    uint32_t max_rank_;
+  };
+
+  struct AckTree {
+  };
+
   class CommunicatorInterface {
   public:
     virtual void Send(const ConstructTree& ct, uint32_t to) = 0;
     virtual void Send(const AckTree& at, uint32_t to) = 0;
-    virtual void Send(const NakTree& nt, uint32_t to) = 0;
-    virtual void Send(const RecoverPropose& rp, uint32_t to) = 0;
-    virtual void Send(const AckRecover& ar, uint32_t to) = 0;
-    virtual void Send(const RecoverCommit& rc, uint32_t to) = 0;
-    virtual void Send(const RecoverReconnect& rr, uint32_t to) = 0;
-    virtual void Send(const Propose& p, uint32_t to) = 0;
-    virtual void Send(const Ack& a, uint32_t to) = 0;
-    virtual void Send(const Commit& c, uint32_t to) = 0;
-    virtual void Send(const Reconnect& r, uint32_t to) = 0;
-    virtual void Send(const ReconnectResponse& recon_resp, uint32_t to) = 0;
-    virtual uint32_t size() const = 0;
-
     virtual ~CommunicatorInterface() {}
   };
 
-  class FailureDetectorInterface {
-  public:
-    typedef void (*Callback)(void*, uint32_t);
-    virtual void AddCallback(Callback cb, void* data) = 0;
-    virtual const boost::icl::interval_set<uint32_t>& set() const = 0;
+  namespace msm = boost::msm;
+  namespace msmf = boost::msm::front;
+  namespace mpl = boost::mpl;
+  namespace icl = boost::icl;
 
-    virtual ~FailureDetectorInterface() {}
-  };
+  struct StateMachine_ : msmf::state_machine_def<StateMachine_> {
 
-  class StateMachine {
-  public:
-    enum Status {
-      RECOVERING,
-      FOLLOWING,
-      LEADING
+    struct SharedData {
+      SharedData(CommunicatorInterface* comm, uint32_t rank, uint32_t size)
+        : comm_(comm), rank_(rank), size_(size) {}
+      CommunicatorInterface* comm_;
+      typedef std::map<uint32_t, std::pair<uint32_t, uint64_t> > ChildrenMap;
+      ChildrenMap children_;
+      std::list<uint32_t> ancestors_;
+      icl::interval_set<uint32_t> lower_correct_;
+      icl::interval_set<uint32_t> higher_correct_;
+      icl::interval_set<uint32_t> subtree_correct_;
+      uint32_t rank_;
+      uint32_t size_;
+      uint32_t primary_;
+    } shared_data_;
+
+    StateMachine_(CommunicatorInterface* comm, uint32_t rank, uint32_t size)
+      : shared_data_(comm, rank, size)
+    {
+      assert(rank < size);
+      shared_data_.lower_correct_ +=
+        icl::interval<uint32_t>::closed(0, rank);
+      shared_data_.higher_correct_ +=
+        icl::interval<uint32_t>::closed(rank + 1, size - 1);
+      shared_data_.subtree_correct_ = shared_data_.higher_correct_;
+    }
+
+    // List of FSM states
+    struct TreeConstruction_ : msmf::state_machine_def<TreeConstruction_> {
+      SharedData* shared_data_;
+      template <class Event, class FSM>
+      void on_entry(const Event&, FSM& fsm)
+      {
+        shared_data_ = &fsm.shared_data_;
+      }
+
+      // List of FSM states
+      struct Reset : public msmf::state<> {
+        template <class Event, class FSM>
+        void on_entry(const Event&, FSM& fsm)
+        {
+          fsm.shared_data_->children_.clear();
+          fsm.shared_data_->ancestors_.clear();
+          fsm.shared_data_->primary_ =
+            icl::first(fsm.shared_data_->lower_correct_);
+        }
+      };
+
+      struct WaitForParent : public msmf::state<> {
+      };
+
+      struct WaitForAck : public msmf::state<> {
+      };
+
+      struct Constructing : public msmf::state<> {
+      };
+
+      struct Exit : public msmf::exit_pseudo_state<msmf::none> {};
+
+      typedef Reset initial_state;
+
+      // Guards
+      struct IsPrimary {
+        template <class Event, class FSM, class SourceState, class TargetState>
+        bool operator()(const Event&, FSM& fsm, SourceState&, TargetState&) const
+        {
+          return fsm.shared_data_->primary_ == fsm.shared_data_->rank_;
+        }
+      };
+
+      struct IsLeaf {
+        template <class Event, class FSM, class SourceState, class TargetState>
+        bool operator()(const Event&, FSM& fsm, SourceState&, TargetState&) const
+        {
+          return fsm.shared_data_->subtree_correct_.empty();
+        }
+      };
+
+      // Actions
+      struct ChooseChildren {
+        template <class Event, class FSM, class SourceState, class TargetState>
+        void operator()(const Event&, FSM& fsm, SourceState&, TargetState&) const
+        {
+          uint32_t left_child = icl::first(fsm.shared_data_->subtree_correct_);
+          uint32_t right_child = 0;
+          uint32_t pos = icl::cardinality(fsm.shared_data_->subtree_correct_) / 2;
+          for (icl::interval_set<uint32_t>::const_iterator it =
+                 fsm.shared_data_->subtree_correct_.begin();
+               it != fsm.shared_data_->subtree_correct_.end(); ++it) {
+            if (icl::cardinality(*it) > pos) {
+              right_child = icl::first(*it) + pos;
+              break;
+            }
+            pos -= icl::cardinality(*it);
+          }
+          //assert(right_child > 0);
+
+          ConstructTree ct;
+          ct.ancestors_.push_back(fsm.shared_data_->rank_);
+          ct.ancestors_.insert(ct.ancestors_.end(),
+                               fsm.shared_data_->ancestors_.begin(),
+                               fsm.shared_data_->ancestors_.end());
+          ct.max_rank_ = std::max(left_child, right_child - 1);
+
+          fsm.shared_data_->comm_->Send(ct, left_child);
+          fsm.shared_data_->children_[left_child] =
+            std::make_pair(ct.max_rank_, 0);
+
+          if (left_child != right_child) {
+            ct.max_rank_ = icl::last(fsm.shared_data_->subtree_correct_);
+            fsm.shared_data_->comm_->Send(ct, right_child);
+            fsm.shared_data_->children_[right_child] =
+              std::make_pair(ct.max_rank_, 0);
+          }
+        }
+      };
+
+      struct SetupSubtree {
+        template <class Event, class FSM, class SourceState, class TargetState>
+        void operator()(const Event& e, FSM& fsm, SourceState&, TargetState&) const
+        {
+          fsm.shared_data_->ancestors_.assign(e.ancestors_.begin(),
+                                              e.ancestors_.end());
+          fsm.shared_data_->subtree_correct_ -=
+            icl::interval<uint32_t>::closed(e.max_rank_ + 1,
+                                            fsm.shared_data_->size_ - 1);
+
+          fsm.shared_data_->primary_ = e.ancestors_.back();
+        }
+      };
+
+      struct Acknowledge {
+        template <class Event, class FSM, class SourceState, class TargetState>
+        void operator()(const Event& e, FSM& fsm, SourceState&, TargetState&) const
+        {
+          AckTree at;
+          fsm.shared_data_->comm_->Send(at, fsm.shared_data_->ancestors_.front());
+        }
+      };
+
+      // Transition table
+      struct transition_table : mpl::vector<
+        msmf::Row<Reset, msmf::none, WaitForParent, msmf::none, msmf::none>,
+        msmf::Row<Reset, msmf::none, Constructing, msmf::none, IsPrimary>,
+        msmf::Row<WaitForParent, ConstructTree, Constructing, SetupSubtree, msmf::none>,
+        msmf::Row<Constructing, msmf::none, WaitForAck, ChooseChildren, msmf::none>,
+        msmf::Row<Constructing, msmf::none, Exit, Acknowledge, IsLeaf>
+        > {};
+
+      template <class FSM, class Event>
+      void no_transition(const Event& e, FSM&, int state)
+      {
+        std::cout << "TreeConstruction: no transition from state " << state
+                  << " on event " << typeid(e).name() << std::endl;
+        assert(0);
+      }
     };
-    typedef void (*DeliverFunc)(void*, uint64_t id, const std::string& message);
-    typedef void (*StatusFunc)(void*, Status status, uint32_t primary);
-    StateMachine(uint32_t rank, CommunicatorInterface& comm,
-                 FailureDetectorInterface& fd, DeliverFunc df, StatusFunc sf,
-                 void* cb_data);
-    void Start();
-    uint64_t Propose(const std::string& message);
 
-    void Receive(const spob::ConstructTree& ct, uint32_t from);
-    void Receive(const spob::AckTree& at, uint32_t from);
-    void Receive(const spob::NakTree& at, uint32_t from);
-    void Receive(const spob::RecoverPropose& rp, uint32_t from);
-    void Receive(const spob::AckRecover& ar, uint32_t from);
-    void Receive(const spob::RecoverCommit& rc, uint32_t from);
-    void Receive(const spob::RecoverReconnect& rr, uint32_t from);
-    void Receive(const spob::Propose& p, uint32_t from);
-    void Receive(const spob::Ack& a, uint32_t from);
-    void Receive(const spob::Commit& c, uint32_t from);
-    void Receive(const spob::Reconnect& r, uint32_t from);
-    void Receive(const spob::ReconnectResponse& recon_resp, uint32_t from);
-  private:
-    void Recover();
-    void ConstructTree(uint32_t max_rank);
-    void AckTree();
-    void NakTree(const spob::NakTree* nt);
-    void RecoverPropose();
-    void AckRecover();
-    void RecoverCommit();
-    void Propose(const spob::Propose& p);
-    void Ack(const spob::Ack& a);
-    void Commit(const spob::Commit& c);
-    void FDCallback(uint32_t rank);
+    typedef msm::back::state_machine<TreeConstruction_> TreeConstruction;
 
-    static void FDCallbackStatic(void* data, uint32_t rank);
+    struct Recovering : public msmf::state<> {
+    };
 
-    uint32_t rank_;
-    CommunicatorInterface& comm_;
-    FailureDetectorInterface& fd_;
-    DeliverFunc df_;
-    StatusFunc sf_;
-    void* cb_data_;
-    uint32_t primary_;
-    uint32_t parent_;
-    uint64_t count_;
-    uint32_t max_rank_;
-    uint64_t last_proposed_mid_;
-    uint64_t last_acked_mid_;
-    uint64_t last_committed_mid_;
-    uint64_t current_mid_;
-    bool constructing_;
-    bool recovering_;
-    bool leaf_;
-    bool got_propose_;
-    bool acked_;
-    unsigned int tree_acks_;
-    std::list<uint32_t> ancestors_;
-    std::map<uint32_t, std::pair<uint32_t, uint64_t> > children_;
-    typedef std::map<uint64_t,
-                     std::pair<std::string,
-                               boost::icl::interval_set<uint32_t> > > LogType;
-    LogType log_;
-    boost::icl::interval_set<uint32_t> recover_ack_;
-    spob::ConstructTree ct_;
-    spob::AckTree at_;
-    spob::NakTree nt_;
-    spob::RecoverPropose rp_;
-    spob::AckRecover ar_;
-    spob::RecoverCommit rc_;
-    spob::RecoverReconnect rr_;
-    spob::Propose p_;
-    spob::Ack a_;
-    spob::Commit c_;
-    spob::Reconnect r_;
-    spob::ReconnectResponse recon_resp_;
+    typedef TreeConstruction initial_state;
+
+    struct transition_table : mpl::vector<
+      msmf::Row<TreeConstruction::exit_pt<TreeConstruction_::Exit>,
+                msmf::none, Recovering, msmf::none, msmf::none>
+      > {};
+
+    template <class FSM, class Event>
+    void no_transition(const Event& e, FSM&, int state)
+    {
+      std::cout << "StateMachine: no transition from state " << state
+                << " on event " << typeid(e).name() << std::endl;
+      assert(0);
+    }
   };
 
+  typedef msm::back::state_machine<StateMachine_> StateMachine;
 }

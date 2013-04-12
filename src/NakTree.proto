@@ -1,6 +1,0 @@
-package spob;
-
-message NakTree {
-  required uint32 primary = 1;
-  required uint64 count = 2;
-}

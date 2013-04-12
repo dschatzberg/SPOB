@@ -1,16 +1,17 @@
 cmake_minimum_required (VERSION 2.8.7)
-project (Spob)
-
-include (CheckIncludeFiles)
+project (Spob C CXX)
 
 set (Spob_VERSION_MAJOR 0)
 set (Spob_VERSION_MINOR 1)
+
+include(CheckCXXCompilerFlag)
+include(CTest)
 
 set (CMAKE_CXX_FLAGS_DEBUG "")
 set (CMAKE_CXX_FLAGS_RELEASE "")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "")
 set (CMAKE_CXX_FLAGS_MINSIZEREL "")
-include(CheckCXXCompilerFlag)
+
 check_cxx_compiler_flag(-Wall HAS_WALL)
 if (HAS_WALL)
    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
@@ -57,46 +58,5 @@ endif()
 #    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO
 #       "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ftest-coverage")
 # endif()
-
-
-set(Boost_ADDITIONAL_VERSIONS "1.49" "1.49.0" "1.50" "1.50.0" "1.51"
-                              "1.51.0" "1.52" "1.52.0" "1.53" "1.53.0")
-find_package( Boost REQUIRED )
-include_directories(${Boost_INCLUDE_DIRS})
-
-find_package( Protobuf REQUIRED)
-include_directories(${PROTOBUF_INCLUDE_DIRS})
-
-include_directories(${CMAKE_SYSTEM_INCLUDE_PATH})
-set(CMAKE_REQUIRED_INCLUDES ${CMAKE_SYSTEM_INCLUDE_PATH})
-check_include_files(bpcore/ppc450_inlines.h HAVE_PPC450_INLINES_H)
-configure_file (
-  "${PROJECT_SOURCE_DIR}/config.h.in"
-  "${PROJECT_BINARY_DIR}/config.h"
-  )
-
-
-include_directories("${PROJECT_BINARY_DIR}")
-include_directories("${PROJECT_SOURCE_DIR}/src")
-
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS 
-                                 src/Ack.proto
-                                 src/AckRecover.proto
-                                 src/AckTree.proto 
-                                 src/Commit.proto 
-                                 src/ConstructTree.proto 
-                                 src/Entry.proto
-                                 src/NakTree.proto 
-                                 src/Propose.proto 
-                                 src/Reconnect.proto 
-                                 src/ReconnectResponse.proto
-                                 src/RecoverCommit.proto 
-                                 src/RecoverPropose.proto 
-                                 src/RecoverReconnect.proto)
-
-add_library(spob src/StateMachine.cc ${PROTO_SRCS} ${PROTO_HDRS})
-
-enable_testing()
-include(CTest)
 
 add_subdirectory(test)

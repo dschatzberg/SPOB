@@ -1,6 +1,0 @@
-package spob;
-
-message Entry {
-  required uint64 mid = 1;
-  required bytes message = 2;
-}

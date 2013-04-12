@@ -1,9 +1,0 @@
-package spob;
-
-import "Entry.proto";
-
-message ReconnectResponse {
-  required uint32 primary = 1;
-  required uint64 last_committed = 2;
-  repeated Entry proposals = 3;
-};

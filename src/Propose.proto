@@ -1,8 +1,0 @@
-package spob;
-
-import "Entry.proto";
-
-message Propose {
-  required uint32 primary = 1;
-  required Entry proposal = 2;
-};
