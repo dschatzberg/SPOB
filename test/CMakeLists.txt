@@ -4,10 +4,13 @@ find_package( Boost )
 if (Boost_FOUND)
   add_subdirectory(gtest-1.6.0)
   include_directories(${PROJECT_SOURCE_DIR}/src)
+  include_directories(${PROJECT_SOURCE_DIR}/test)
   include_directories(${Boost_INCLUDE_DIRS})
   include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
-  add_executable(unit_test UnitTest.cc)
-  target_link_libraries(unit_test gtest gtest_main)
-  add_test(unit_test unit_test)
+  add_executable(primary_construction_test 
+    PrimaryConstructionTest.cpp 
+    TestCommunicator.cpp)
+  target_link_libraries(primary_construction_test gtest gtest_main)
+  add_test(primary_construction_test primary_construction_test)
 endif()
 

@@ -20,6 +20,11 @@ namespace spob {
   struct AckTree {
   };
 
+  struct Failure {
+    Failure(uint32_t rank) : rank_(rank) {}
+    uint32_t rank_;
+  };
+
   class CommunicatorInterface {
   public:
     virtual void Send(const ConstructTree& ct, uint32_t to) = 0;
@@ -57,7 +62,6 @@ namespace spob {
         icl::interval<uint32_t>::closed(0, rank);
       shared_data_.higher_correct_ +=
         icl::interval<uint32_t>::closed(rank + 1, size - 1);
-      shared_data_.subtree_correct_ = shared_data_.higher_correct_;
     }
 
     // List of FSM states
@@ -78,6 +82,7 @@ namespace spob {
           fsm.shared_data_->ancestors_.clear();
           fsm.shared_data_->primary_ =
             icl::first(fsm.shared_data_->lower_correct_);
+          fsm.shared_data_->subtree_correct_ = fsm.shared_data_->higher_correct_;
         }
       };
 
@@ -108,6 +113,14 @@ namespace spob {
         bool operator()(const Event&, FSM& fsm, SourceState&, TargetState&) const
         {
           return fsm.shared_data_->subtree_correct_.empty();
+        }
+      };
+
+      struct ChildFailed {
+        template <class Event, class FSM, class SourceState, class TargetState>
+        bool operator()(const Event& e, FSM& fsm, SourceState&, TargetState&) const
+        {
+          return fsm.shared_data_->children_.count(e.rank_);
         }
       };
 
@@ -173,13 +186,28 @@ namespace spob {
         }
       };
 
+      struct RecordFailure {
+        template <class Event, class FSM, class SourceState, class TargetState>
+        void operator()(const Event& e, FSM& fsm, SourceState&, TargetState&) const
+        {
+          if (e.rank_ > fsm.shared_data_->rank_) {
+            fsm.shared_data_->higher_correct_ -= e.rank_;
+          } else {
+            fsm.shared_data_->lower_correct_ -= e.rank_;
+          }
+        }
+      };
+
       // Transition table
       struct transition_table : mpl::vector<
         msmf::Row<Reset, msmf::none, WaitForParent, msmf::none, msmf::none>,
         msmf::Row<Reset, msmf::none, Constructing, msmf::none, IsPrimary>,
         msmf::Row<WaitForParent, ConstructTree, Constructing, SetupSubtree, msmf::none>,
         msmf::Row<Constructing, msmf::none, WaitForAck, ChooseChildren, msmf::none>,
-        msmf::Row<Constructing, msmf::none, Exit, Acknowledge, IsLeaf>
+        msmf::Row<Constructing, msmf::none, Exit, Acknowledge, IsLeaf>,
+        msmf::Row<WaitForAck, Failure, Reset, RecordFailure, msmf::euml::And_<
+                                                               IsPrimary,
+                                                               ChildFailed> >
         > {};
 
       template <class FSM, class Event>

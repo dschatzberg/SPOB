@@ -4,7 +4,8 @@
 
 #include "gtest/gtest.h"
 
-#include "Spob.h"
+#include "Spob.hpp"
+#include "TestCommunicator.hpp"
 
 namespace {
   class TreeConstructionTest : public ::testing::Test {
@@ -22,27 +23,9 @@ namespace {
       leaf_.start();
     }
 
-    class Communicator : public spob::CommunicatorInterface {
-    public:
-      void Send(const spob::ConstructTree& ct, uint32_t to) {
-        event_t e = ct;
-        messages_.push(std::make_pair(ct, to));
-      }
-      void Send(const spob::AckTree& at, uint32_t to) {
-        event_t e = at;
-        messages_.push(std::make_pair(at, to));
-      }
-
-      typedef boost::variant<spob::ConstructTree,
-                             spob::AckTree
-                             > event_t;
-      typedef std::pair<event_t, uint32_t> message_t;
-      std::queue<message_t> messages_;
-    };
-
-    Communicator comm_root_;
-    Communicator comm_parent_;
-    Communicator comm_leaf_;
+    TestCommunicator comm_root_;
+    TestCommunicator comm_parent_;
+    TestCommunicator comm_leaf_;
     spob::StateMachine root_;
     spob::StateMachine parent_;
     spob::StateMachine leaf_;
@@ -51,7 +34,7 @@ namespace {
 
 TEST_F(TreeConstructionTest, RootPicksChildren) {
   ASSERT_EQ(2u, comm_root_.messages_.size());
-  Communicator::message_t m = comm_root_.messages_.front();
+  TestCommunicator::message_t m = comm_root_.messages_.front();
   ASSERT_EQ(1u, m.second);
   spob::ConstructTree* ct = boost::get<spob::ConstructTree>(&m.first);
   ASSERT_TRUE(ct != NULL);
@@ -79,7 +62,7 @@ TEST_F(TreeConstructionTest, ParentChoosesChildren) {
 
   parent_.process_event(ct);
   ASSERT_EQ(1u, comm_parent_.messages_.size());
-  Communicator::message_t m = comm_parent_.messages_.front();
+  TestCommunicator::message_t m = comm_parent_.messages_.front();
   ASSERT_EQ(2u, m.second);
   spob::ConstructTree* ctp = boost::get<spob::ConstructTree>(&m.first);
   ASSERT_TRUE(ctp != NULL);
@@ -98,7 +81,7 @@ TEST_F(TreeConstructionTest, LeafChoosesChildren) {
 
   leaf_.process_event(ct);
   ASSERT_EQ(1u, comm_leaf_.messages_.size());
-  Communicator::message_t m = comm_leaf_.messages_.front();
+  TestCommunicator::message_t m = comm_leaf_.messages_.front();
   ASSERT_EQ(1u, m.second);
   spob::AckTree* at = boost::get<spob::AckTree>(&m.first);
   ASSERT_TRUE(at != NULL);
