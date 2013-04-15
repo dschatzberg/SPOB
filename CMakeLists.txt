@@ -61,11 +61,8 @@ endif()
 
 set(Boost_ADDITIONAL_VERSIONS "1.49" "1.49.0" "1.50" "1.50.0" "1.51"
                               "1.51.0" "1.52" "1.52.0" "1.53" "1.53.0")
-find_package( Boost REQUIRED )
+find_package( Boost 1.46.0 REQUIRED )
 include_directories(${Boost_INCLUDE_DIRS})
-
-find_package( Protobuf REQUIRED)
-include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 include_directories(${CMAKE_SYSTEM_INCLUDE_PATH})
 set(CMAKE_REQUIRED_INCLUDES ${CMAKE_SYSTEM_INCLUDE_PATH})
@@ -79,24 +76,9 @@ configure_file (
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}/src")
 
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS 
-                                 src/Ack.proto
-                                 src/AckRecover.proto
-                                 src/AckTree.proto 
-                                 src/Commit.proto 
-                                 src/ConstructTree.proto 
-                                 src/Entry.proto
-                                 src/NakTree.proto 
-                                 src/Propose.proto 
-                                 src/Reconnect.proto 
-                                 src/ReconnectResponse.proto
-                                 src/RecoverCommit.proto 
-                                 src/RecoverPropose.proto 
-                                 src/RecoverReconnect.proto)
+add_library(spob src/StateMachine.cpp)
 
-add_library(spob src/StateMachine.cc ${PROTO_SRCS} ${PROTO_HDRS})
+# enable_testing()
+# include(CTest)
 
-enable_testing()
-include(CTest)
-
-add_subdirectory(test)
+# add_subdirectory(test)

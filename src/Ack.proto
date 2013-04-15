@@ -1,6 +1,0 @@
-package spob;
-
-message Ack {
-  required uint32 primary = 1;
-  required uint64 mid = 2;
-};

@@ -1,8 +1,0 @@
-package spob;
-
-message Reconnect {
-  required uint32 primary = 1;
-  required uint32 max_rank = 2;
-  required uint64 last_proposed = 3;
-  required uint64 last_acked = 4;
-};

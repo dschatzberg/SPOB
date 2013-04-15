@@ -3,24 +3,88 @@
 #include <stdint.h>
 
 #include <list>
+#include <map>
 #include <string>
 
 #include <boost/icl/interval_set.hpp>
 
-#include "Ack.pb.h"
-#include "AckRecover.pb.h"
-#include "AckTree.pb.h"
-#include "Commit.pb.h"
-#include "ConstructTree.pb.h"
-#include "NakTree.pb.h"
-#include "Propose.pb.h"
-#include "Reconnect.pb.h"
-#include "ReconnectResponse.pb.h"
-#include "RecoverCommit.pb.h"
-#include "RecoverPropose.pb.h"
-#include "RecoverReconnect.pb.h"
-
 namespace spob {
+  struct ConstructTree {
+    uint32_t max_rank_;
+    uint64_t count_;
+    std::list<uint32_t> ancestors_;
+  };
+
+  struct AckTree {
+    uint32_t primary_;
+    uint64_t count_;
+    uint64_t last_mid_;
+  };
+
+  struct NakTree {
+    uint32_t primary_;
+    uint64_t count_;
+  };
+
+  struct RecoverPropose {
+    enum RecoverType {
+      kDiff,
+      kTrunc
+    };
+    uint32_t primary_;
+    RecoverType type_;
+    std::list<std::pair<uint64_t, std::string> > proposals_; // for diff
+    uint64_t last_mid_; // for trunc
+  };
+
+  struct AckRecover {
+    uint32_t primary_;
+  };
+
+  struct RecoverCommit {
+    uint32_t primary_;
+  };
+
+  struct RecoverReconnect {
+    uint32_t primary_;
+    uint32_t max_rank_;
+    uint64_t last_proposed_;
+    bool got_propose_;
+    bool acked_;
+  };
+
+  struct Propose {
+    uint32_t primary_;
+    std::pair<uint64_t, std::string> proposal_;
+  };
+
+  struct Ack {
+    uint32_t primary_;
+    uint64_t mid_;
+  };
+
+  struct Commit {
+    uint32_t primary_;
+    uint64_t mid_;
+  };
+
+  struct Reconnect {
+    uint32_t primary_;
+    uint32_t max_rank_;
+    uint64_t last_proposed_;
+    uint64_t last_acked_;
+  };
+
+  struct ReconnectResponse {
+    uint32_t primary_;
+    uint64_t last_committed_;
+    std::list<std::pair<uint64_t, std::string> > proposals_;
+  };
+
+  struct Failure {
+    uint32_t rank_;
+  };
+
   class CommunicatorInterface {
   public:
     virtual void Send(const ConstructTree& ct, uint32_t to) = 0;
@@ -35,32 +99,24 @@ namespace spob {
     virtual void Send(const Commit& c, uint32_t to) = 0;
     virtual void Send(const Reconnect& r, uint32_t to) = 0;
     virtual void Send(const ReconnectResponse& recon_resp, uint32_t to) = 0;
-    virtual uint32_t size() const = 0;
 
     virtual ~CommunicatorInterface() {}
-  };
-
-  class FailureDetectorInterface {
-  public:
-    typedef void (*Callback)(void*, uint32_t);
-    virtual void AddCallback(Callback cb, void* data) = 0;
-    virtual const boost::icl::interval_set<uint32_t>& set() const = 0;
-
-    virtual ~FailureDetectorInterface() {}
   };
 
   class StateMachine {
   public:
     enum Status {
-      RECOVERING,
-      FOLLOWING,
-      LEADING
+      kRecovering,
+      kFollowing,
+      kLeading
     };
-    typedef void (*DeliverFunc)(void*, uint64_t id, const std::string& message);
-    typedef void (*StatusFunc)(void*, Status status, uint32_t primary);
-    StateMachine(uint32_t rank, CommunicatorInterface& comm,
-                 FailureDetectorInterface& fd, DeliverFunc df, StatusFunc sf,
-                 void* cb_data);
+    struct Callback {
+      virtual void operator()(uint64_t id, const std::string& message) = 0;
+      virtual void operator()(Status status, uint32_t primary) = 0;
+    };
+    StateMachine(uint32_t rank, uint32_t size,
+                 CommunicatorInterface& comm, Callback& cb);
+
     void Start();
     uint64_t Propose(const std::string& message);
 
@@ -76,38 +132,31 @@ namespace spob {
     void Receive(const spob::Commit& c, uint32_t from);
     void Receive(const spob::Reconnect& r, uint32_t from);
     void Receive(const spob::ReconnectResponse& recon_resp, uint32_t from);
+    void Receive(const spob::Failure& failure);
   private:
     void Recover();
-    void ConstructTree(uint32_t max_rank);
+    void ConstructTree();
     void AckTree();
-    void NakTree(const spob::NakTree* nt);
+    void NakTree(const spob::NakTree& nt);
     void RecoverPropose();
     void AckRecover();
     void RecoverCommit();
     void Propose(const spob::Propose& p);
     void Ack(const spob::Ack& a);
     void Commit(const spob::Commit& c);
-    void FDCallback(uint32_t rank);
-
-    static void FDCallbackStatic(void* data, uint32_t rank);
 
     uint32_t rank_;
+    uint32_t size_;
     CommunicatorInterface& comm_;
-    FailureDetectorInterface& fd_;
-    DeliverFunc df_;
-    StatusFunc sf_;
-    void* cb_data_;
+    Callback& cb_;
     uint32_t primary_;
-    uint32_t parent_;
     uint64_t count_;
-    uint32_t max_rank_;
     uint64_t last_proposed_mid_;
     uint64_t last_acked_mid_;
     uint64_t last_committed_mid_;
     uint64_t current_mid_;
     bool constructing_;
     bool recovering_;
-    bool leaf_;
     bool got_propose_;
     bool acked_;
     unsigned int tree_acks_;
@@ -118,18 +167,8 @@ namespace spob {
                                boost::icl::interval_set<uint32_t> > > LogType;
     LogType log_;
     boost::icl::interval_set<uint32_t> recover_ack_;
-    spob::ConstructTree ct_;
-    spob::AckTree at_;
-    spob::NakTree nt_;
-    spob::RecoverPropose rp_;
-    spob::AckRecover ar_;
-    spob::RecoverCommit rc_;
-    spob::RecoverReconnect rr_;
-    spob::Propose p_;
-    spob::Ack a_;
-    spob::Commit c_;
-    spob::Reconnect r_;
-    spob::ReconnectResponse recon_resp_;
+    boost::icl::interval_set<uint32_t> lower_correct_;
+    boost::icl::interval_set<uint32_t> upper_correct_;
+    boost::icl::interval_set<uint32_t> subtree_correct_;
   };
-
 }
