@@ -8,83 +8,9 @@
 
 #include <boost/icl/interval_set.hpp>
 
+#include "Messages.hpp"
+
 namespace spob {
-  struct ConstructTree {
-    uint32_t max_rank_;
-    uint64_t count_;
-    std::list<uint32_t> ancestors_;
-  };
-
-  struct AckTree {
-    uint32_t primary_;
-    uint64_t count_;
-    uint64_t last_mid_;
-  };
-
-  struct NakTree {
-    uint32_t primary_;
-    uint64_t count_;
-  };
-
-  struct RecoverPropose {
-    enum RecoverType {
-      kDiff,
-      kTrunc
-    };
-    uint32_t primary_;
-    RecoverType type_;
-    std::list<std::pair<uint64_t, std::string> > proposals_; // for diff
-    uint64_t last_mid_; // for trunc
-  };
-
-  struct AckRecover {
-    uint32_t primary_;
-  };
-
-  struct RecoverCommit {
-    uint32_t primary_;
-  };
-
-  struct RecoverReconnect {
-    uint32_t primary_;
-    uint32_t max_rank_;
-    uint64_t last_proposed_;
-    bool got_propose_;
-    bool acked_;
-  };
-
-  struct Propose {
-    uint32_t primary_;
-    std::pair<uint64_t, std::string> proposal_;
-  };
-
-  struct Ack {
-    uint32_t primary_;
-    uint64_t mid_;
-  };
-
-  struct Commit {
-    uint32_t primary_;
-    uint64_t mid_;
-  };
-
-  struct Reconnect {
-    uint32_t primary_;
-    uint32_t max_rank_;
-    uint64_t last_proposed_;
-    uint64_t last_acked_;
-  };
-
-  struct ReconnectResponse {
-    uint32_t primary_;
-    uint64_t last_committed_;
-    std::list<std::pair<uint64_t, std::string> > proposals_;
-  };
-
-  struct Failure {
-    uint32_t rank_;
-  };
-
   class CommunicatorInterface {
   public:
     virtual void Send(const ConstructTree& ct, uint32_t to) = 0;
@@ -113,6 +39,7 @@ namespace spob {
     struct Callback {
       virtual void operator()(uint64_t id, const std::string& message) = 0;
       virtual void operator()(Status status, uint32_t primary) = 0;
+      virtual ~Callback() {}
     };
     StateMachine(uint32_t rank, uint32_t size,
                  CommunicatorInterface& comm, Callback& cb);

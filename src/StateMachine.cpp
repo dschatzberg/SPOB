@@ -343,42 +343,43 @@ StateMachine::ConstructTree()
   children_.clear();
   if (subtree_correct_.empty()) {
     AckTree();
-  }
+  } else {
 
-  //left child is next lowest rank above ours
-  uint32_t left_child = icl::first(subtree_correct_);
+    //left child is next lowest rank above ours
+    uint32_t left_child = icl::first(subtree_correct_);
 
-  //right child is the median process in our subtree
-  uint32_t right_child = 0;
-  uint32_t pos = icl::cardinality(subtree_correct_) / 2;
-  for (icl::interval_set<uint32_t>::const_iterator it =
-         subtree_correct_.begin();
-       it != subtree_correct_.end(); ++it) {
-    if (icl::cardinality(*it) > pos) {
-      right_child = icl::first(*it) + pos;
-      break;
+    //right child is the median process in our subtree
+    uint32_t right_child = 0;
+    uint32_t pos = icl::cardinality(subtree_correct_) / 2;
+    for (icl::interval_set<uint32_t>::const_iterator it =
+           subtree_correct_.begin();
+         it != subtree_correct_.end(); ++it) {
+      if (icl::cardinality(*it) > pos) {
+        right_child = icl::first(*it) + pos;
+        break;
+      }
+      pos -= icl::cardinality(*it);
     }
-    pos -= icl::cardinality(*it);
-  }
-  assert(right_child > 0);
+    assert(right_child > 0);
 
-  spob::ConstructTree ct;
-  ct.ancestors_.push_back(rank_);
-  ct.ancestors_.insert(ct.ancestors_.end(), ancestors_.begin(),
-                       ancestors_.end());
-  ct.count_ = count_;
+    spob::ConstructTree ct;
+    ct.ancestors_.push_back(rank_);
+    ct.ancestors_.insert(ct.ancestors_.end(), ancestors_.begin(),
+                         ancestors_.end());
+    ct.count_ = count_;
 
-  //tell left child to construct
-  uint32_t left_child_max_rank = std::max(left_child, right_child - 1);
-  ct.max_rank_ = left_child_max_rank;
-  comm_.Send(ct, left_child);
-  children_[left_child] = std::make_pair(left_child_max_rank, 0);
+    //tell left child to construct
+    uint32_t left_child_max_rank = std::max(left_child, right_child - 1);
+    ct.max_rank_ = left_child_max_rank;
+    comm_.Send(ct, left_child);
+    children_[left_child] = std::make_pair(left_child_max_rank, 0);
 
-  if (left_child != right_child) {
-    //tell right child to construct
-    ct.max_rank_ = icl::last(subtree_correct_);
-    comm_.Send(ct, right_child);
-    children_[right_child] = std::make_pair(ct.max_rank_, 0);
+    if (left_child != right_child) {
+      //tell right child to construct
+      ct.max_rank_ = icl::last(subtree_correct_);
+      comm_.Send(ct, right_child);
+      children_[right_child] = std::make_pair(ct.max_rank_, 0);
+    }
   }
 }
 

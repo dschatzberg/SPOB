@@ -1,2 +1,2 @@
-add_subdirectory(mpi)
+#add_subdirectory(mpi)
 add_subdirectory(reproducible)

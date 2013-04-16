@@ -76,9 +76,9 @@ configure_file (
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}/src")
 
-add_library(spob src/StateMachine.cpp)
+add_library(spob src/StateMachine.cpp src/Messages.cpp)
 
 # enable_testing()
 # include(CTest)
 
-# add_subdirectory(test)
+add_subdirectory(test)

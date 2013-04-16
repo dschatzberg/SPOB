@@ -2,13 +2,13 @@
 
 #include <stdint.h>
 
-#include "Spob.h"
+#include "Spob.hpp"
 
-class Coroutine;
+class Process;
 
 class Communicator : public spob::CommunicatorInterface {
 public:
-  Communicator(Coroutine& c, uint32_t rank, uint32_t size);
+  Communicator(Process& p);
   void Send(const spob::ConstructTree& ct, uint32_t to);
   void Send(const spob::AckTree& at, uint32_t to);
   void Send(const spob::NakTree& nt, uint32_t to);
@@ -21,9 +21,8 @@ public:
   void Send(const spob::Commit& c, uint32_t to);
   void Send(const spob::Reconnect& r, uint32_t to);
   void Send(const spob::ReconnectResponse& recon_resp, uint32_t to);
-  uint32_t size() const;
 private:
-  Coroutine& c_;
-  uint32_t rank_;
-  uint32_t size_;
+  template <typename T>
+  void DoSend(const T& t, uint32_t to);
+  Process& p_;
 };

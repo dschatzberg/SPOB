@@ -3,15 +3,12 @@
 #include <random>
 #include <vector>
 
-class Coroutine;
+class Process;
 
-namespace {
-  std::vector<Coroutine*> coroutines;
-  std::vector<Coroutine*> runnable_coroutines;
-  uint32_t size;
-  std::default_random_engine rng;
-  double propose_probability;
-  int num_proposals;
-  int max_proposals;
-  bool verbose;
-}
+extern std::vector<Process*> processes;
+extern uint32_t size;
+extern bool verbose;
+extern std::set<Process*> runnable_processes;
+extern int primary;
+extern int max_proposals;
+extern int num_proposals;
