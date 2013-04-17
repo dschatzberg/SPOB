@@ -56,6 +56,8 @@ int main (int argc, char* argv[])
     processes[i] = new Process(i);
   }
 
+  std::set<Process*> alive_processes(processes.begin(), processes.end());
+
   std::vector<coroutine_t> coroutines;
   for (uint32_t i = 0; i < size; ++i) {
     coroutines.push_back(coroutine_t(*processes[i]));
@@ -63,13 +65,35 @@ int main (int argc, char* argv[])
 
   std::default_random_engine rng(seed);
   std::bernoulli_distribution propose(propose_probability);
+  std::bernoulli_distribution fail(failure_probability);
   while (1) {
-    if (runnable_processes.size() == 0 &&
-        num_proposals == max_proposals) {
+    if ((runnable_processes.size() == 0 &&
+         num_proposals == max_proposals) ||
+        alive_processes.size() == 1) {
       break;
     }
 
-    if (primary != -1 && num_proposals < max_proposals &&
+    if (fail(rng)) {
+      std::uniform_int_distribution<uint32_t> dist(0, alive_processes.size() - 1);
+      uint32_t next = dist(rng);
+      std::set<Process*>::iterator it = alive_processes.begin();
+      std::advance(it, next);
+      alive_processes.erase(it);
+      Process* p = *it;
+      if (verbose) {
+        std::cout << "Process " << p->rank_ << " failed" << std::endl;
+      }
+      p->failed_ = true;
+      runnable_processes.erase(p);
+      if ((int)p->rank_ == primary) {
+        primary = -1;
+      }
+      for (std::set<Process*>::iterator it = alive_processes.begin();
+           it != alive_processes.end(); ++it) {
+        (*it)->unreported_.insert(p->rank_);
+      }
+      runnable_processes.insert(alive_processes.begin(), alive_processes.end());
+    } else if (primary != -1 && num_proposals < max_proposals &&
         processes[primary]->can_propose_ &&
         (runnable_processes.size() == 0 || propose(rng))) {
       processes[primary]->command_ = Propose();
@@ -86,14 +110,27 @@ int main (int argc, char* argv[])
         p->command_ = Continue();
         coroutines[p->rank_]();
       } else {
-        std::uniform_int_distribution<uint32_t> dist(0, p->pending_queues_.size() - 1);
-        uint32_t next = dist(rng);
-        std::set<uint32_t>::iterator it = p->pending_queues_.begin();
-        std::advance(it, next);
-        Receive r;
-        r.from = *it;
-        p->command_ = r;
-        coroutines[p->rank_]();
+        std::bernoulli_distribution notify;
+        if (p->pending_messages_ == 0 ||
+            (!p->unreported_.empty() && notify(rng))) {
+          std::uniform_int_distribution<uint32_t> dist(0, p->unreported_.size() - 1);
+          uint32_t next = dist(rng);
+          std::set<uint32_t>::iterator it = p->unreported_.begin();
+          std::advance(it, next);
+          Notify n;
+          n.failed = *it;
+          p->command_ = n;
+          coroutines[p->rank_]();
+        } else {
+          std::uniform_int_distribution<uint32_t> dist(0, p->pending_queues_.size() - 1);
+          uint32_t next = dist(rng);
+          std::set<uint32_t>::iterator it = p->pending_queues_.begin();
+          std::advance(it, next);
+          Receive r;
+          r.from = *it;
+          p->command_ = r;
+          coroutines[p->rank_]();
+        }
       }
     }
   }

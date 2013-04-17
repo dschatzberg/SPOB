@@ -36,12 +36,24 @@ Process::operator()(boost::coroutines::coroutine<void()>::caller_type& ca)
         pending_queues_.erase(index);
       }
       pending_messages_--;
-      if (pending_messages_ == 0) {
+      if (pending_messages_ == 0 && unreported_.empty()) {
         runnable_processes.erase(this);
       }
     } else if (boost::get<Propose>(&command_)) {
       num_proposals++;
       sm_.Propose("test");
+    } else if (Notify* n = boost::get<Notify>(&command_)) {
+      uint32_t failed = n->failed;
+      unreported_.erase(failed);
+      if (pending_messages_ == 0 && unreported_.empty()) {
+        runnable_processes.erase(this);
+      }
+      if (verbose) {
+        std::cout << rank_ << ": Detected " << failed << " failed" << std::endl;
+      }
+      spob::Failure f;
+      f.rank_ = failed;
+      sm_.Receive(f);
     }
   }
 }
@@ -60,14 +72,12 @@ Process::operator()(spob::StateMachine::Status status, uint32_t p)
     active_ = true;
     runnable_processes.insert(this);
     (*ca_)();
-    if (pending_messages_ == 0) {
+    if (pending_messages_ == 0 && unreported_.empty()) {
       runnable_processes.erase(this);
     }
     if (boost::get<Propose>(&command_)) {
       num_proposals++;
       sm_.Propose("test");
     }
-  } else if (primary == (int)rank_ && status == spob::StateMachine::kRecovering) {
-    primary = -1;
   }
 }

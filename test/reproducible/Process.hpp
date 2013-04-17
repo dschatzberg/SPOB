@@ -20,6 +20,10 @@ struct Propose {
 struct Continue {
 };
 
+struct Notify {
+  uint32_t failed;
+};
+
 class Process : public spob::StateMachine::Callback {
 public:
   class MessageHandler : public boost::static_visitor<> {
@@ -52,9 +56,9 @@ public:
     spob::ReconnectResponse> Message;
   std::vector<std::queue<Message> > queues_;
   std::set<uint32_t> pending_queues_;
-  std::vector<uint32_t> unreported_;
+  std::set<uint32_t> unreported_;
   boost::coroutines::coroutine<void()>::caller_type* ca_;
-  boost::variant<Receive, Propose, Continue> command_;
+  boost::variant<Receive, Propose, Continue, Notify> command_;
   MessageHandler mh_;
   uint32_t rank_;
   uint32_t pending_messages_;

@@ -71,6 +71,7 @@ namespace spob {
     void Propose(const spob::Propose& p);
     void Ack(const spob::Ack& a);
     void Commit(const spob::Commit& c);
+    void PrintState();
 
     uint32_t rank_;
     uint32_t size_;

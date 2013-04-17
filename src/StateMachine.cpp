@@ -70,8 +70,7 @@ StateMachine::Receive(const spob::ConstructTree& ct, uint32_t from)
 void
 StateMachine::Receive(const spob::AckTree& at, uint32_t from)
 {
-  if (at.primary_ == primary_ && at.count_ == count_) {
-    assert(children_.count(from));
+  if (at.primary_ == primary_ && at.count_ == count_ && children_.count(from)) {
     tree_acks_++;
     children_[from].second = at.last_mid_;
     if (tree_acks_ == children_.size()) {
@@ -236,6 +235,7 @@ StateMachine::Commit(const spob::Commit& c)
   cb_(id, log_[id].first);
   log_.erase(log_.begin());
   last_committed_mid_ = id;
+  last_acked_mid_ = std::max(last_acked_mid_, last_committed_mid_);
 }
 
 void
@@ -258,6 +258,7 @@ StateMachine::Receive(const spob::Reconnect& r, uint32_t from)
       rr.proposals_.push_back(std::make_pair(it->first, it->second.first));
     }
     comm_.Send(rr, from);
+    children_[from] = std::make_pair(r.max_rank_, r.last_proposed_);
     // We look in the reverse order of all the outstanding
     // proposals. If we see one that we are allowed to acknowledge
     // then all preceding proposals can be acknowledged
@@ -266,8 +267,9 @@ StateMachine::Receive(const spob::Reconnect& r, uint32_t from)
          it != log_.rend(); ++it) {
       it->second.second -= icl::interval<uint32_t>::closed(from, r.max_rank_);
       if (it->second.second.empty()) {
+        LogType::iterator cmp = it.base();
         for (LogType::iterator it2 = log_.begin();
-             it2 != it.base()++; it2++) {
+             it2 != cmp; ++it2) {
           if (rank_ == primary_) {
             spob::Commit c;
             c.primary_ = primary_;
@@ -283,7 +285,6 @@ StateMachine::Receive(const spob::Reconnect& r, uint32_t from)
         break;
       }
     }
-    children_[from] = std::make_pair(r.max_rank_, r.last_proposed_);
   }
 }
 
@@ -302,7 +303,7 @@ StateMachine::Receive(const spob::ReconnectResponse& recon_resp, uint32_t from)
     }
     log_.erase(log_.begin(), log_.upper_bound(recon_resp.last_committed_));
     last_committed_mid_ = recon_resp.last_committed_;
-    if (recon_resp.proposals_.empty()) {
+    if (!recon_resp.proposals_.empty()) {
       for (std::list<std::pair<uint64_t, std::string> >::const_iterator it =
              recon_resp.proposals_.begin();
            it != recon_resp.proposals_.end(); ++it) {
@@ -310,6 +311,12 @@ StateMachine::Receive(const spob::ReconnectResponse& recon_resp, uint32_t from)
                     std::make_pair(it->first,
                                    std::make_pair(it->second,
                                                   subtree_correct_)));
+        if (subtree_correct_.empty()) {
+          spob::Ack a;
+          a.primary_ = primary_;
+          a.mid_ = it->first;
+          Ack(a);
+        }
       }
       last_proposed_mid_ = recon_resp.proposals_.rbegin()->first;
     }
@@ -491,13 +498,12 @@ StateMachine::Receive(const spob::Failure& f)
       } else {
         // failure during broadcast phase, check outstanding proposals
         // to see if we can ack any of them
-        for (LogType::reverse_iterator it =
-               static_cast<LogType::reverse_iterator>
-               (log_.upper_bound(last_acked_mid_));
-             it != log_.rend(); ++it) {
+        for (LogType::reverse_iterator it = log_.rbegin();
+             it != static_cast<LogType::reverse_iterator>
+               (log_.upper_bound(last_acked_mid_)); ++it) {
           it->second.second -= f.rank_;
           if (it->second.second.empty()) {
-            for (LogType::iterator it2 = log_.begin();
+            for (LogType::iterator it2 = log_.upper_bound(last_acked_mid_);
                  it2 != it.base()++; it2++) {
               if (rank_ == primary_) {
                 spob::Commit c;
@@ -511,6 +517,7 @@ StateMachine::Receive(const spob::Failure& f)
                 Ack(a);
               }
             }
+            break;
           }
         }
       }
@@ -522,14 +529,22 @@ StateMachine::Receive(const spob::Failure& f)
           if (recovering_) {
             RecoverReconnect rr;
             rr.primary_ = primary_;
-            rr.max_rank_ = icl::last(subtree_correct_);
+            if (subtree_correct_.empty()) {
+              rr.max_rank_ = rank_;
+            } else {
+              rr.max_rank_ = icl::last(subtree_correct_);
+            }
             rr.got_propose_ = got_propose_;
             rr.acked_ = acked_;
             comm_.Send(rr, *it);
           } else {
             Reconnect r;
             r.primary_ = primary_;
-            r.max_rank_ = icl::last(subtree_correct_);
+            if (subtree_correct_.empty()) {
+              r.max_rank_ = rank_;
+            } else {
+              r.max_rank_ = icl::last(subtree_correct_);
+            }
             r.last_proposed_ = last_proposed_mid_;
             r.last_acked_ = last_acked_mid_;
             comm_.Send(r, *it);
@@ -539,5 +554,24 @@ StateMachine::Receive(const spob::Failure& f)
         }
       }
     }
+  }
+}
+
+void
+StateMachine::PrintState() {
+  std::cout << "Ancestors: {";
+  if (!ancestors_.empty()) {
+    std::copy(ancestors_.begin(), --(ancestors_.end()),
+              std::ostream_iterator<uint32_t>(std::cout, ", "));
+    std::cout << ancestors_.back();
+  }
+  std::cout << "}" << std::endl;
+
+  std::cout << "Children:" << std::endl;
+  for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::iterator it =
+         children_.begin(); it != children_.end(); ++it) {
+    std::cout << "Key: " << it->first << std::endl;
+    std::cout << "Val: " << it->second.first << ", " <<
+      it->second.second << std::endl;
   }
 }

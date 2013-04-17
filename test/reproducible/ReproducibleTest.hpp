@@ -12,3 +12,4 @@ extern std::set<Process*> runnable_processes;
 extern int primary;
 extern int max_proposals;
 extern int num_proposals;
+extern std::set<Process*> notify_processes;

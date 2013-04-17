@@ -17,7 +17,7 @@ Communicator::DoSend(const T& t, uint32_t to)
     p_.can_propose_ = false;
     runnable_processes.insert(&p_);
     (*p_.ca_)();
-    if (p_.pending_messages_ == 0) {
+    if (p_.pending_messages_ == 0 && p_.unreported_.empty()) {
       runnable_processes.erase(&p_);
     }
     p_.can_propose_ = temp;
