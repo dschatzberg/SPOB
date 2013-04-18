@@ -5,7 +5,7 @@ if (Boost_MPI_FOUND AND Threads_FOUND AND Boost_PROGRAM_OPTIONS_FOUND AND
     Boost_TIMER_FOUND AND Boost_SERIALIZATION_FOUND AND Boost_SYSTEM_FOUND AND
     Boost_CHRONO_FOUND AND MPI_FOUND)
    include_directories(${MPI_INCLUDE_PATH})
-   add_executable(mpi-test test.cc)
+   add_executable(mpi-test test.cpp)
    target_link_libraries (mpi-test spob ${Boost_MPI_LIBRARY}
       ${MPI_LIBRARIES} ${Boost_SERIALIZATION_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} 
       ${Boost_TIMER_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_SYSTEM_LIBRARY} 
