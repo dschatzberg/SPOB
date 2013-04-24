@@ -1,5 +1,9 @@
 #include "config.h"
 
+#include <algorithm>
+#include <iterator>
+#include <sstream>
+
 #include <boost/mpi.hpp>
 #include <boost/program_options.hpp>
 #if HAVE_PPC450_INLINES_H
@@ -24,6 +28,7 @@ namespace {
     return _bgp_GetTimeBase();
   }
   const std::string timer_unit("cycles");
+  double per_ms = 850000;
 #else
   boost::timer::cpu_timer timer;
   typedef boost::timer::nanosecond_type time_t;
@@ -31,18 +36,23 @@ namespace {
     return timer.elapsed().wall;
   }
   const std::string timer_unit("nanoseconds");
+  double per_ms = 1000000;
 #endif
+  time_t total_time;
+  time_t sample_time;
 }
 
 class Callback : public spob::StateMachine::Callback {
 public:
-  Callback(spob::StateMachine** sm, long int num_messages)
-    : n_(num_messages), sm_(sm)
+  Callback(spob::StateMachine** sm)
+    : sm_(sm)
   {
     mpi::communicator world;
     rank_ = world.rank();
     primary_ = 0;
     count_ = 0;
+    last_count_ = 0;
+    start_ = last_time_ = GetTime();
   }
 
   void operator()(spob::StateMachine::Status status, uint32_t primary)
@@ -52,7 +62,6 @@ public:
         std::cout << rank_ << ": Recovered and Leading" << std::endl;
       }
       primary_ = primary;
-      start_ = GetTime();
       for (int i = 0; i < outstanding; i++) {
         (*sm_)->Propose("test");
       }
@@ -70,37 +79,52 @@ public:
       std::cout << rank_ << ": Delivered message: 0x" << std::hex << id <<
         std::dec << ", \"" << message << "\"" << std::endl;
     }
-    if (count_ == n_) {
-      quit = true;
-      if (rank_ == primary_) {
-        time_t delta = GetTime() - start_;
-        std::cout << "Output " << n_ << " messages in " << delta << " "
-                  << timer_unit << std::endl;
-      }
-    } else if (rank_ == primary_) {
+    if (rank_ == primary_) {
       (*sm_)->Propose("test");
+    }
+  }
+  void Process()
+  {
+    if ((GetTime() - start_) > (total_time * per_ms)) {
+      if (rank_ == primary_ && !counts_.empty()) {
+        std::ostringstream ss;
+        std::copy(counts_.begin(), --(counts_.end()),
+                  std::ostream_iterator<uint64_t>(ss, " "));
+        ss << counts_.back();
+        std::cout << ss.str() << std::endl;
+      }
+      quit = true;
+    } else if ((GetTime() - last_time_) > (sample_time * per_ms)) {
+      if (rank_ == primary_) {
+        counts_.push_back(count_ - last_count_);
+        last_count_ = count_;
+        last_time_ = GetTime();
+      }
     }
   }
 private:
   uint32_t primary_;
   uint32_t rank_;
-  long int count_;
-  long int n_;
+  uint64_t count_;
+  uint64_t last_count_;
   spob::StateMachine** sm_;
   time_t start_;
+  time_t last_time_;
+  std::list<uint64_t> counts_;
 };
 
 int main(int argc, char* argv[])
 {
-  int num_messages;
   po::options_description desc("Options");
   try {
     desc.add_options()
       ("help", "produce help message")
       ("v", po::value<bool>(&verbose)->default_value(false),
        "enable verbose output")
-      ("nm", po::value<int>(&num_messages)->required(),
-       "set number of messages")
+      ("t", po::value<time_t>(&total_time)->required(),
+       "set total time (ms)")
+      ("ts", po::value<time_t>(&sample_time)->required(),
+       "set sample time (ms)")
       ("no", po::value<int>(&outstanding)->required(),
        "set max number of outstanding messages")
       ;
@@ -120,13 +144,14 @@ int main(int argc, char* argv[])
 
   mpi::environment env(argc, argv);
   spob::StateMachine* sm;
-  Callback cb(&sm, num_messages);
+  Callback cb(&sm);
   Communicator comm(&sm, verbose);
   mpi::communicator world;
   sm = new spob::StateMachine(world.rank(), world.size(), comm, cb);
   sm->Start();
   while (!quit) {
     comm.Process();
+    cb.Process();
   }
   delete sm;
   return 0;
