@@ -4,6 +4,8 @@
 #include <boost/program_options.hpp>
 #if HAVE_PPC450_INLINES_H
 #include <bpcore/ppc450_inlines.h>
+#elif HAVE_A2_INLINES_H
+#include <bqc/A2_inlines.h>
 #else
 #include <boost/timer/timer.hpp>
 #endif
@@ -22,6 +24,12 @@ namespace {
   typedef uint64_t my_time_t;
   my_time_t GetTime() {
     return _bgp_GetTimeBase();
+  }
+  const std::string timer_unit("cycles");
+#elif HAVE_A2_INLINES_H
+  typedef uint64_t my_time_t;
+  my_time_t GetTime() {
+    return GetTimeBase();
   }
   const std::string timer_unit("cycles");
 #else

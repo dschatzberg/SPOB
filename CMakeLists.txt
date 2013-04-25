@@ -67,6 +67,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${CMAKE_SYSTEM_INCLUDE_PATH})
 set(CMAKE_REQUIRED_INCLUDES ${CMAKE_SYSTEM_INCLUDE_PATH})
 check_include_files(bpcore/ppc450_inlines.h HAVE_PPC450_INLINES_H)
+check_include_files(hwi/include/bqc/A2_inlines.h HAVE_A2_INLINES_H)
 configure_file (
   "${PROJECT_SOURCE_DIR}/config.h.in"
   "${PROJECT_BINARY_DIR}/config.h"
