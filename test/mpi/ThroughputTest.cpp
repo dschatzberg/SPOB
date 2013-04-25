@@ -21,25 +21,26 @@ namespace mpi = boost::mpi;
 namespace {
   bool quit = false;
   bool verbose;
-  int outstanding;
+  uint32_t outstanding;
+  uint32_t string_size;
 #if HAVE_PPC450_INLINES_H
-  typedef uint64_t time_t;
-  time_t GetTime() {
+  typedef uint64_t my_time_t;
+  my_time_t GetTime() {
     return _bgp_GetTimeBase();
   }
   const std::string timer_unit("cycles");
   double per_ms = 850000;
 #else
   boost::timer::cpu_timer timer;
-  typedef boost::timer::nanosecond_type time_t;
-  time_t GetTime() {
+  typedef boost::timer::nanosecond_type my_time_t;
+  my_time_t GetTime() {
     return timer.elapsed().wall;
   }
   const std::string timer_unit("nanoseconds");
   double per_ms = 1000000;
 #endif
-  time_t total_time;
-  time_t sample_time;
+  my_time_t total_time;
+  my_time_t sample_time;
 }
 
 class Callback : public spob::StateMachine::Callback {
@@ -62,8 +63,8 @@ public:
         std::cout << rank_ << ": Recovered and Leading" << std::endl;
       }
       primary_ = primary;
-      for (int i = 0; i < outstanding; i++) {
-        (*sm_)->Propose("test");
+      for (uint32_t i = 0; i < outstanding; i++) {
+        (*sm_)->Propose(std::string(string_size, ' '));
       }
     } else if (spob::StateMachine::kFollowing) {
       primary_ = primary;
@@ -80,7 +81,7 @@ public:
         std::dec << ", \"" << message << "\"" << std::endl;
     }
     if (rank_ == primary_) {
-      (*sm_)->Propose("test");
+      (*sm_)->Propose(std::string(string_size, ' '));
     }
   }
   void Process()
@@ -108,8 +109,8 @@ private:
   uint64_t count_;
   uint64_t last_count_;
   spob::StateMachine** sm_;
-  time_t start_;
-  time_t last_time_;
+  my_time_t start_;
+  my_time_t last_time_;
   std::list<uint64_t> counts_;
 };
 
@@ -121,12 +122,14 @@ int main(int argc, char* argv[])
       ("help", "produce help message")
       ("v", po::value<bool>(&verbose)->default_value(false),
        "enable verbose output")
-      ("t", po::value<time_t>(&total_time)->required(),
+      ("t", po::value<my_time_t>(&total_time)->required(),
        "set total time (ms)")
-      ("ts", po::value<time_t>(&sample_time)->required(),
+      ("ts", po::value<my_time_t>(&sample_time)->required(),
        "set sample time (ms)")
-      ("no", po::value<int>(&outstanding)->required(),
+      ("no", po::value<uint32_t>(&outstanding)->required(),
        "set max number of outstanding messages")
+      ("ss", po::value<uint32_t>(&string_size)->required(),
+       "set string size of message")
       ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);

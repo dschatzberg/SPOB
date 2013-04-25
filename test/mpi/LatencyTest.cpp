@@ -17,16 +17,17 @@ namespace mpi = boost::mpi;
 namespace {
   bool quit = false;
   bool verbose;
+  uint32_t string_size;
 #if HAVE_PPC450_INLINES_H
-  typedef uint64_t time_t;
-  time_t GetTime() {
+  typedef uint64_t my_time_t;
+  my_time_t GetTime() {
     return _bgp_GetTimeBase();
   }
   const std::string timer_unit("cycles");
 #else
   boost::timer::cpu_timer timer;
-  typedef boost::timer::nanosecond_type time_t;
-  time_t GetTime() {
+  typedef boost::timer::nanosecond_type my_time_t;
+  my_time_t GetTime() {
     return timer.elapsed().wall;
   }
   const std::string timer_unit("nanoseconds");
@@ -52,7 +53,7 @@ public:
       }
       primary_ = primary;
       start_ = GetTime();
-      (*sm_)->Propose("test");
+      (*sm_)->Propose(std::string(string_size, ' '));
     } else if (spob::StateMachine::kFollowing) {
       primary_ = primary;
       if (verbose) {
@@ -75,7 +76,7 @@ public:
                   << " " << timer_unit << std::endl;
       }
     } else if (rank_ == primary_) {
-      time_t sample = GetTime() - start_;
+      my_time_t sample = GetTime() - start_;
       if (count_ == 1) {
         old_mean_ = new_mean_ = sample;
         old_square_ = 0.0;
@@ -87,7 +88,7 @@ public:
         old_square_ = new_square_;
       }
       start_ = GetTime();
-      (*sm_)->Propose("test");
+      (*sm_)->Propose(std::string(string_size, ' '));
     }
   }
 private:
@@ -96,7 +97,7 @@ private:
   long int count_;
   long int n_;
   spob::StateMachine** sm_;
-  time_t start_;
+  my_time_t start_;
   double old_mean_;
   double new_mean_;
   double old_square_;
@@ -114,6 +115,8 @@ int main(int argc, char* argv[])
        "enable verbose output")
       ("nm", po::value<int>(&num_messages)->required(),
        "set number of messages")
+      ("ss", po::value<uint32_t>(&string_size)->required(),
+       "set string size of message")
       ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
