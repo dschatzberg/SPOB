@@ -46,7 +46,7 @@ namespace {
 class Callback : public spob::StateMachine::Callback {
 public:
   Callback(spob::StateMachine** sm)
-    : sm_(sm)
+    : sm_(sm), message_(string_size, '\0')
   {
     mpi::communicator world;
     rank_ = world.rank();
@@ -64,7 +64,7 @@ public:
       }
       primary_ = primary;
       for (uint32_t i = 0; i < outstanding; i++) {
-        (*sm_)->Propose(std::string(string_size, ' '));
+        (*sm_)->Propose(message_);
       }
     } else if (spob::StateMachine::kFollowing) {
       primary_ = primary;
@@ -81,7 +81,7 @@ public:
         std::dec << ", \"" << message << "\"" << std::endl;
     }
     if (rank_ == primary_) {
-      (*sm_)->Propose(std::string(string_size, ' '));
+      (*sm_)->Propose(message_);
     }
   }
   void Process()
@@ -112,6 +112,7 @@ private:
   my_time_t start_;
   my_time_t last_time_;
   std::list<uint64_t> counts_;
+  std::string message_;
 };
 
 int main(int argc, char* argv[])

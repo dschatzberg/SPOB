@@ -142,7 +142,10 @@ Communicator::DoSend(const T& t, uint32_t to)
     std::cout << rank_ << ": Sending " << t << " to " << to << std::endl;
   }
   mpi::communicator world;
-  world.send(to, 0, Message(t));;
+  mpi::request r = world.isend(to, 0, Message(t));
+  if(!r.test()) {
+    pending_.push(std::make_pair(r, Message(t)));
+  }
 }
 
 void
@@ -220,6 +223,9 @@ Communicator::Send(const spob::ReconnectResponse& recon_resp, uint32_t to)
 void
 Communicator::Process()
 {
+  while (!pending_.empty() && pending_.front().first.test()) {
+    pending_.pop();
+  }
   rv_.opt_status_ = req_.test();
   if (rv_.opt_status_) {
     boost::apply_visitor(rv_, message_);

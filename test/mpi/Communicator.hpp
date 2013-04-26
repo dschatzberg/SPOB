@@ -1,5 +1,7 @@
 #pragma once
 
+#include <queue>
+
 #include <boost/mpi.hpp>
 #include <boost/variant.hpp>
 
@@ -55,4 +57,5 @@ private:
   Message message_;
   uint32_t rank_;
   bool verbose_;
+  std::queue<std::pair<boost::mpi::request, Message> > pending_;
 };
