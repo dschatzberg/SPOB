@@ -2,3 +2,4 @@
 #define Spob_VERSION_MINOR @Spob_VERSION_MINOR@
 
 #cmakedefine HAVE_PPC450_INLINES_H 1
+#cmakedefine HAVE_A2_INLINES_H 1

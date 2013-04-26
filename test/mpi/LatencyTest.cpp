@@ -5,7 +5,7 @@
 #if HAVE_PPC450_INLINES_H
 #include <bpcore/ppc450_inlines.h>
 #elif HAVE_A2_INLINES_H
-#include <bqc/A2_inlines.h>
+#include <hwi/include/bqc/A2_inlines.h>
 #else
 #include <boost/timer/timer.hpp>
 #endif
