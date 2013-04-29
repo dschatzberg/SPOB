@@ -139,7 +139,8 @@ public:
         mpi::all_gather(world, failed, failed_nodes_);
         for (int i = 0; i < world.size(); ++i) {
           if (failed_nodes_[i]) {
-            failure_notify_.push(std::make_pair(i, last_time_ +
+            failure_notify_.push(std::make_pair(i, static_cast<my_time_t>
+                                                (last_time_ +
                                                 notify_time * per_ms));
           }
         }
