@@ -141,7 +141,7 @@ public:
           if (failed_nodes_[i]) {
             failure_notify_.push(std::make_pair(i, static_cast<my_time_t>
                                                 (last_time_ +
-                                                notify_time * per_ms));
+                                                 notify_time * per_ms)));
           }
         }
       }
