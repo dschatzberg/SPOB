@@ -45,7 +45,7 @@ namespace {
 class Callback : public spob::StateMachine::Callback {
 public:
   Callback(spob::StateMachine** sm, long int num_messages)
-    : n_(num_messages), sm_(sm)
+    : n_(num_messages), sm_(sm), message_(string_size, '\0')
   {
     mpi::communicator world;
     rank_ = world.rank();
@@ -96,7 +96,7 @@ public:
         old_square_ = new_square_;
       }
       start_ = GetTime();
-      (*sm_)->Propose(std::string(string_size, ' '));
+      (*sm_)->Propose(message_);
     }
   }
 private:
@@ -110,6 +110,7 @@ private:
   double new_mean_;
   double old_square_;
   double new_square_;
+  std::string message_;
 };
 
 int main(int argc, char* argv[])

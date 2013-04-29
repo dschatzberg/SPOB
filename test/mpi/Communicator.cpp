@@ -142,10 +142,8 @@ Communicator::DoSend(const T& t, uint32_t to)
     std::cout << rank_ << ": Sending " << t << " to " << to << std::endl;
   }
   mpi::communicator world;
-  mpi::request r = world.isend(to, 0, Message(t));
-  if(!r.test()) {
-    pending_.push(std::make_pair(r, Message(t)));
-  }
+  pending_.push(std::make_pair(mpi::request(), Message(t)));
+  pending_.back().first = world.isend(to, 0, pending_.back().second);
 }
 
 void
@@ -230,7 +228,7 @@ Communicator::Process()
   if (rv_.opt_status_) {
     boost::apply_visitor(rv_, message_);
     mpi::communicator world;
-    req_ = world.irecv(mpi::any_source, mpi::any_tag, message_);
+    req_ = world.irecv(mpi::any_source, 0, message_);
   }
 }
 
