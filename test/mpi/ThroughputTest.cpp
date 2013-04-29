@@ -60,7 +60,7 @@ namespace {
   pair_to_string(const std::pair<double, uint64_t>& p)
   {
     std::ostringstream str;
-    str << "(" << p.first << ", " << p.second << ")";
+    str << p.first << "," << p.second;
     return str.str();
   }
 }
@@ -72,7 +72,7 @@ public:
   {
     mpi::communicator world;
     rank_ = world.rank();
-    primary_ = 0;
+    primary_ = -1;
     count_ = 0;
     last_count_ = 0;
     start_ = last_time_ = GetTime();
@@ -95,6 +95,7 @@ public:
         std::cout << rank_ << ": Recovered and Leading" << std::endl;
       }
       primary_ = primary;
+      last_count_ = count_;
       for (uint32_t i = 0; i < outstanding; i++) {
         (*sm_)->Propose(message_);
       }
@@ -103,6 +104,8 @@ public:
       if (verbose) {
         std::cout << rank_ << ": Recovered and Following " << primary << std::endl;
       }
+    } else {
+      primary_ = -1;
     }
   }
   void operator()(uint64_t id, const std::string& message)
@@ -112,7 +115,7 @@ public:
       std::cout << rank_ << ": Delivered message: 0x" << std::hex << id <<
         std::dec << ", \"" << message << "\"" << std::endl;
     }
-    if (rank_ == primary_) {
+    if ((int)rank_ == primary_) {
       (*sm_)->Propose(message_);
     }
   }
@@ -121,10 +124,48 @@ public:
     if ((GetTime() - last_time_) > (sample_time * per_ms)) {
       samples_++;
       if (samples_ == samples) {
-        Dump();
+        std::ostringstream ss;
+        if (!counts_.empty()) {
+          std::transform(counts_.begin(), counts_.end(),
+                         std::ostream_iterator<std::string>(ss, "\n"),
+                         pair_to_string);
+        }
+        mpi::communicator world;
+        if (rank_ == 0) {
+          std::cout << ss.str();
+          for (int i = 1; i < world.size(); ++i) {
+            std::string to_print;
+            world.recv(i, 1, to_print);
+            std::cout << to_print;
+          }
+        } else {
+          world.send(0, 1, ss.str());
+        }
+        ss.str(std::string());
+        if (tookover_ || failed_) {
+          ss << rank_ << ": ";
+          if (failed_) {
+            ss << "failed at " << (failed_ - start_) / per_ms << "ms ";
+          }
+          if (tookover_) {
+            ss << "tookover at " << (tookover_ - start_) / per_ms
+               << "ms";
+          }
+          ss << std::endl;
+        }
+        if (rank_ == 0) {
+          std::cout << ss.str();
+          for (int i = 1; i < world.size(); ++i) {
+            std::string to_print;
+            world.recv(i, 1, to_print);
+            std::cout << to_print;
+          }
+        } else {
+          world.send(0, 1, ss.str());
+        }
         quit = true;
       } else {
-        if (rank_ == primary_) {
+        if ((int)rank_ == primary_) {
           counts_.push_back(std::make_pair((GetTime() - start_) / per_ms,
                                            count_ - last_count_));
           last_count_ = count_;
@@ -132,8 +173,9 @@ public:
         last_time_ = GetTime();
         bool failed = !failed_ && dist_(gen);
         if (failed) {
-          failed_ = GetTime();
+          failed_ = last_time_;
           no_comm = true;
+          primary_ = -1;
         }
         mpi::communicator world;
         mpi::all_gather(world, failed, failed_nodes_);
@@ -154,9 +196,8 @@ public:
     }
   }
 private:
-  void Dump()
+  void Dump(std::ostringstream& ss)
   {
-    std::ostringstream ss;
     ss << rank_ << ": ";
     if (tookover_) {
       ss << "tookover at " << (tookover_ - start_) / per_ms
@@ -173,7 +214,7 @@ private:
     }
     std::cout << ss.str() << std::endl;
   }
-  uint32_t primary_;
+  int primary_;
   uint32_t rank_;
   uint32_t samples_;
   uint64_t count_;
