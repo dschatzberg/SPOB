@@ -206,9 +206,8 @@ StateMachine::Ack(const spob::Ack& a)
 void
 StateMachine::Receive(const spob::Ack& a, uint32_t from)
 {
-  if (a.primary_ == primary_ && children_.count(from)) {
+  if (a.primary_ == primary_ && children_.count(from) && log_.count(a.mid_)) {
     uint64_t id = a.mid_;
-    assert(log_.count(id) == 1);
     log_[id].second -=
       icl::interval<uint32_t>::closed(from, children_[from].first);
     if (log_[id].second.empty()) {

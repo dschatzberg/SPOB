@@ -145,7 +145,7 @@ public:
         }
       }
     }
-    while (failure_notify_.front().second > GetTime()) {
+    while (!failure_notify_.empty() && failure_notify_.front().second <= GetTime()) {
       spob::Failure f;
       f.rank_ = failure_notify_.front().first;
       (*sm_)->Receive(f);
