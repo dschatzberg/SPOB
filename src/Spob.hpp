@@ -42,8 +42,10 @@ namespace spob {
       kLeading
     };
     struct Callback {
-      virtual void operator()(uint64_t id, const std::string& message) = 0;
-      virtual void operator()(Status status, uint32_t primary) = 0;
+      virtual void Deliver(uint64_t id, const std::string& message) = 0;
+      virtual void StatusChange(Status status, uint32_t primary) = 0;
+      virtual void TakeSnapshot(std::string& snapshot) = 0;
+      virtual void ApplySnapshot(const std::string& snapshot) = 0;
       virtual ~Callback() {}
     };
     StateMachine(uint32_t rank, uint32_t size, uint32_t replicas,

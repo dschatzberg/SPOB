@@ -53,7 +53,7 @@ public:
     count_ = 0;
   }
 
-  void operator()(spob::StateMachine::Status status, uint32_t primary)
+  void StatusChange(spob::StateMachine::Status status, uint32_t primary)
   {
     if (status == spob::StateMachine::kLeading) {
       if (verbose) {
@@ -69,7 +69,7 @@ public:
       }
     }
   }
-  void operator()(uint64_t id, const std::string& message)
+  void Deliver(uint64_t id, const std::string& message)
   {
     count_++;
     if (verbose) {
@@ -98,6 +98,12 @@ public:
       start_ = GetTime();
       (*sm_)->Propose(message_);
     }
+  }
+  void TakeSnapshot(std::string& snapshot)
+  {
+  }
+  void ApplySnapshot(const std::string& snapshot)
+  {
   }
 private:
   uint32_t primary_;

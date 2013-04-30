@@ -37,8 +37,10 @@ public:
   };
   Process(uint32_t rank);
   void operator()(boost::coroutines::coroutine<void()>::caller_type& ca);
-  void operator()(uint64_t id, const std::string& message);
-  void operator()(spob::StateMachine::Status status, uint32_t primary);
+  void Deliver(uint64_t id, const std::string& message);
+  void StatusChange(spob::StateMachine::Status status, uint32_t primary);
+  void TakeSnapshot(std::string& snapshot);
+  void ApplySnapshot(const std::string& snapshot);
   Communicator comm_;
   spob::StateMachine sm_;
   typedef boost::variant<

@@ -194,7 +194,7 @@ StateMachine::Receive(const spob::ListenerRecoverReconnect& lrr, uint32_t from)
       ri.primary_ = primary_;
       ri.last_committed_ = last_committed_mid_;
       if (last_committed_mid_ > lrr.last_committed_) {
-        //FIXME: get snapshot
+        cb_.TakeSnapshot(ri.snapshot_);
       }
       comm_.Send(ri, from);
     }
@@ -207,7 +207,7 @@ StateMachine::Receive(const spob::RecoverCommit& rc, uint32_t from)
 {
   if (rc.primary_ == primary_ && from == ancestors_.front()) {
     RecoverCommit();
-    cb_(kFollowing, primary_);
+    cb_.StatusChange(kFollowing, primary_);
   }
 }
 
@@ -217,10 +217,10 @@ StateMachine::Receive(const spob::RecoverInform& ri, uint32_t from)
   if (ri.primary_ == primary_ && from == ancestors_.front()) {
     if (ri.last_committed_ > last_committed_mid_) {
       last_committed_mid_ = ri.last_committed_;
-      //FIXME: apply snapshot
+      cb_.ApplySnapshot(ri.snapshot_);
     }
     RecoverInform();
-    cb_(kFollowing, primary_);
+    cb_.StatusChange(kFollowing, primary_);
   }
 }
 
@@ -278,7 +278,7 @@ StateMachine::Commit(const spob::Commit& c)
     comm_.Send(c, it->first);
   }
   uint64_t id = c.mid_;
-  cb_(id, log_[id].first);
+  cb_.Deliver(id, log_[id].first);
   log_.erase(log_.begin());
   last_committed_mid_ = id;
   last_acked_mid_ = std::max(last_acked_mid_, last_committed_mid_);
@@ -292,7 +292,7 @@ StateMachine::Inform(const spob::Inform& i)
     comm_.Send(i, it->first);
   }
   if (rank_ != primary_) {
-    cb_(i.t_.first, i.t_.second);
+    cb_.Deliver(i.t_.first, i.t_.second);
     last_committed_mid_ = i.t_.first;
   }
 }
@@ -368,7 +368,7 @@ StateMachine::Receive(const spob::ListenerReconnect& lr, uint32_t from)
     lrr.primary_ = primary_;
     lrr.last_committed_ = last_committed_mid_;
     if (lr.last_committed_ > last_committed_mid_) {
-      //FIXME: Get snapshot
+      cb_.TakeSnapshot(lrr.snapshot_);
     }
     comm_.Send(lrr, from);
     listener_children_[from] = 0;
@@ -386,7 +386,7 @@ StateMachine::Receive(const spob::ReconnectResponse& recon_resp, uint32_t from)
     }
     for (LogType::const_iterator it = log_.begin();
          it != log_.upper_bound(recon_resp.last_committed_); ++it) {
-      cb_(it->first, it->second.first);
+      cb_.Deliver(it->first, it->second.first);
     }
     log_.erase(log_.begin(), log_.upper_bound(recon_resp.last_committed_));
     last_committed_mid_ = recon_resp.last_committed_;
@@ -415,7 +415,7 @@ StateMachine::Receive(const spob::ListenerReconnectResponse& lrecon_resp, uint32
 {
   if (lrecon_resp.primary_ == primary_ && from == ancestors_.front()) {
     if(lrecon_resp.last_committed_ > last_committed_mid_) {
-      //FIXME: Apply snapshot
+      cb_.ApplySnapshot(lrecon_resp.snapshot_);
       last_committed_mid_ = lrecon_resp.last_committed_;
       for (std::map<uint32_t, uint64_t>::const_iterator it
              = listener_children_.begin();
@@ -442,7 +442,7 @@ StateMachine::Recover()
     listener_subtree_correct_ = listener_upper_correct_;
     ConstructTree();
   }
-  cb_(kRecovering, 0);
+  cb_.StatusChange(kRecovering, 0);
 }
 
 void
@@ -595,7 +595,7 @@ StateMachine::AckRecover()
     current_mid_ = ((last_proposed_mid_ >> 32) + 1) << 32;
     // Make sure we don't wrap around the epoch
     assert(current_mid_ > last_proposed_mid_);
-    cb_(kLeading, primary_);
+    cb_.StatusChange(kLeading, primary_);
   } else {
     spob::AckRecover ar;
     ar.primary_ = primary_;
@@ -614,7 +614,7 @@ StateMachine::RecoverCommit()
     comm_.Send(rc, it->first);
   }
   for (LogType::const_iterator it = log_.begin(); it != log_.end(); ++it) {
-    cb_(it->first, it->second.first);
+    cb_.Deliver(it->first, it->second.first);
   }
   log_.clear();
   recovering_ = false;
@@ -624,18 +624,22 @@ void
 StateMachine::RecoverInform()
 {
   spob::RecoverInform ri;
+  spob::RecoverInform ri_s;
   ri.primary_ = primary_;
-  std::string snapshot;
+  ri_s.primary_ = primary_;
+  ri.last_committed_ = last_committed_mid_;
+  ri_s.last_committed_ = last_committed_mid_;
   for (std::map<uint32_t, uint64_t>::const_iterator it
        = listener_children_.begin();
        it != listener_children_.end(); ++it) {
-    ri.last_committed_ = last_committed_mid_;
-    if (last_committed_mid_ > it->second && snapshot.empty()) {
-      //FIXME: get snapshot
-      ri.snapshot_ = snapshot;
+    if (last_committed_mid_ > it->second) {
+      if (ri_s.snapshot_.empty()) {
+        cb_.TakeSnapshot(ri_s.snapshot_);
+      }
+      comm_.Send(ri_s, it->first);
+    } else {
+      comm_.Send(ri, it->first);
     }
-    comm_.Send(ri, it->first);
-    ri.snapshot_.clear();
   }
   recovering_ = false;
 }

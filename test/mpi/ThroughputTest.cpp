@@ -87,7 +87,7 @@ public:
     delete failed_nodes_;
   }
 
-  void operator()(spob::StateMachine::Status status, uint32_t primary)
+  void StatusChange(spob::StateMachine::Status status, uint32_t primary)
   {
     if (status == spob::StateMachine::kLeading) {
       tookover_ = GetTime();
@@ -108,7 +108,7 @@ public:
       primary_ = -1;
     }
   }
-  void operator()(uint64_t id, const std::string& message)
+  void Deliver(uint64_t id, const std::string& message)
   {
     count_++;
     if (verbose) {
@@ -118,6 +118,12 @@ public:
     if ((int)rank_ == primary_) {
       (*sm_)->Propose(message_);
     }
+  }
+  void TakeSnapshot(std::string& snapshot)
+  {
+  }
+  void ApplySnapshot(const std::string& snapshot)
+  {
   }
   void Process()
   {

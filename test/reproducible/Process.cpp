@@ -59,12 +59,12 @@ Process::operator()(boost::coroutines::coroutine<void()>::caller_type& ca)
 }
 
 void
-Process::operator()(uint64_t id, const std::string& message)
+Process::Deliver(uint64_t id, const std::string& message)
 {
 }
 
 void
-Process::operator()(spob::StateMachine::Status status, uint32_t p)
+Process::StatusChange(spob::StateMachine::Status status, uint32_t p)
 {
   if (status == spob::StateMachine::kLeading) {
     primary = rank_;
@@ -80,4 +80,13 @@ Process::operator()(spob::StateMachine::Status status, uint32_t p)
       sm_.Propose("test");
     }
   }
+}
+
+void
+Process::TakeSnapshot(std::string& snapshot)
+{
+}
+void
+Process::ApplySnapshot(const std::string& snapshot)
+{
 }
