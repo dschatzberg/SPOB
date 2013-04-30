@@ -116,12 +116,15 @@ private:
 int main(int argc, char* argv[])
 {
   int num_messages;
+  uint32_t replicas;
   po::options_description desc("Options");
   try {
     desc.add_options()
       ("help", "produce help message")
       ("v", po::value<bool>(&verbose)->default_value(false),
        "enable verbose output")
+      ("r", po::value<uint32_t>(&replicas)->required(),
+       "set number of replicas")
       ("nm", po::value<int>(&num_messages)->required(),
        "set number of messages")
       ("ss", po::value<uint32_t>(&string_size)->required(),
@@ -146,7 +149,7 @@ int main(int argc, char* argv[])
   Callback cb(&sm, num_messages);
   Communicator comm(&sm, verbose);
   mpi::communicator world;
-  sm = new spob::StateMachine(world.rank(), world.size(), comm, cb);
+  sm = new spob::StateMachine(world.rank(), world.size(), replicas, comm, cb);
   sm->Start();
   while (!quit) {
     comm.Process();

@@ -17,10 +17,12 @@ public:
   void Send(const spob::RecoverPropose& rp, uint32_t to);
   void Send(const spob::AckRecover& ar, uint32_t to);
   void Send(const spob::RecoverCommit& rc, uint32_t to);
+  void Send(const spob::RecoverInform& ri, uint32_t to);
   void Send(const spob::RecoverReconnect& rr, uint32_t to);
   void Send(const spob::Propose& p, uint32_t to);
   void Send(const spob::Ack& a, uint32_t to);
   void Send(const spob::Commit& c, uint32_t to);
+  void Send(const spob::Inform& i, uint32_t to);
   void Send(const spob::Reconnect& r, uint32_t to);
   void Send(const spob::ReconnectResponse& recon_resp, uint32_t to);
   void Process();
@@ -48,10 +50,12 @@ private:
     spob::RecoverPropose,
     spob::AckRecover,
     spob::RecoverCommit,
+    spob::RecoverInform,
     spob::RecoverReconnect,
     spob::Propose,
     spob::Ack,
     spob::Commit,
+    spob::Inform,
     spob::Reconnect,
     spob::ReconnectResponse> Message;
   Message message_;

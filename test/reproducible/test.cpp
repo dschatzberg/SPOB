@@ -15,6 +15,7 @@ std::set<Process*> runnable_processes;
 int primary = -1;
 int max_proposals;
 int num_proposals = 0;
+uint32_t replicas;
 
 namespace po = boost::program_options;
 
@@ -28,6 +29,8 @@ int main (int argc, char* argv[])
     desc.add_options()
       ("help", "produce help message")
       ("v", po::value<bool>(&verbose)->default_value(false), "enable verbose output")
+      ("r", po::value<uint32_t>(&replicas)->required(),
+       "set number of replicas")
       ("np", po::value<uint32_t>(&size)->required(), "set number of processes")
       ("nm", po::value<int>(&max_proposals)->required(), "set number of messages")
       ("p-prop", po::value<double>(&propose_probability)->required(),

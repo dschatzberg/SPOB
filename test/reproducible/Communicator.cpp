@@ -70,6 +70,11 @@ Communicator::Send(const spob::RecoverCommit& rc, uint32_t to)
   DoSend(rc, to);
 }
 void
+Communicator::Send(const spob::RecoverInform& ri, uint32_t to)
+{
+  DoSend(ri, to);
+}
+void
 Communicator::Send(const spob::Propose& p, uint32_t to)
 {
   DoSend(p, to);
@@ -83,6 +88,11 @@ void
 Communicator::Send(const spob::Commit& c, uint32_t to)
 {
   DoSend(c, to);
+}
+void
+Communicator::Send(const spob::Inform& i, uint32_t to)
+{
+  DoSend(i, to);
 }
 void
 Communicator::Send(const spob::Reconnect& r, uint32_t to)

@@ -52,6 +52,12 @@ namespace spob {
   };
   std::ostream& operator<<(std::ostream& strm, const RecoverCommit& rc);
 
+  struct RecoverInform {
+    uint32_t primary_;
+    std::string snapshot_;
+  };
+  std::ostream& operator<<(std::ostream& strm, const RecoverInform& ri);
+
   struct RecoverReconnect {
     uint32_t primary_;
     uint32_t max_rank_;
@@ -78,6 +84,12 @@ namespace spob {
     uint64_t mid_;
   };
   std::ostream& operator<<(std::ostream& strm, const Commit& c);
+
+  struct Inform {
+    uint32_t primary_;
+    Transaction t_;
+  };
+  std::ostream& operator<<(std::ostream& strm, const Inform& i);
 
   struct Reconnect {
     uint32_t primary_;

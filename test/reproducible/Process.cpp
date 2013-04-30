@@ -13,7 +13,7 @@ void Process::MessageHandler::operator()(T& message) const
 }
 
 Process::Process(uint32_t rank)
-  : comm_(*this), sm_(rank, size, comm_, *this), queues_(size),
+  : comm_(*this), sm_(rank, size, replicas, comm_, *this), queues_(size),
     mh_(*this), rank_(rank),
     pending_messages_(0), active_(false), failed_(false)
 {

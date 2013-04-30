@@ -48,10 +48,12 @@ public:
     spob::RecoverPropose,
     spob::AckRecover,
     spob::RecoverCommit,
+    spob::RecoverInform,
     spob::RecoverReconnect,
     spob::Propose,
     spob::Ack,
     spob::Commit,
+    spob::Inform,
     spob::Reconnect,
     spob::ReconnectResponse> Message;
   std::vector<std::queue<Message> > queues_;

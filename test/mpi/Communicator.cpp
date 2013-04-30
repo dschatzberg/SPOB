@@ -58,6 +58,14 @@ namespace boost {
 
     template<class Archive>
     inline void
+    serialize(Archive &ar, spob::RecoverInform &ri, const unsigned int file_version)
+    {
+      ar & ri.primary_;
+      ar & ri.snapshot_;
+    }
+
+    template<class Archive>
+    inline void
     serialize(Archive &ar, spob::RecoverReconnect &rr, const unsigned int file_version)
     {
       ar & rr.primary_;
@@ -89,6 +97,14 @@ namespace boost {
     {
       ar & c.primary_;
       ar & c.mid_;
+    }
+
+    template<class Archive>
+    inline void
+    serialize(Archive &ar, spob::Inform &i, const unsigned int file_version)
+    {
+      ar & i.primary_;
+      ar & i.t_;
     }
 
     template<class Archive>
@@ -189,6 +205,12 @@ Communicator::Send(const spob::RecoverCommit& rc, uint32_t to)
 }
 
 void
+Communicator::Send(const spob::RecoverInform& ri, uint32_t to)
+{
+  DoSend(ri, to);
+}
+
+void
 Communicator::Send(const spob::Propose& p, uint32_t to)
 {
   DoSend(p, to);
@@ -204,6 +226,12 @@ void
 Communicator::Send(const spob::Commit& c, uint32_t to)
 {
   DoSend(c, to);
+}
+
+void
+Communicator::Send(const spob::Inform& i, uint32_t to)
+{
+  DoSend(i, to);
 }
 
 void

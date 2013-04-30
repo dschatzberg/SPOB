@@ -92,6 +92,15 @@ spob::operator<<(std::ostream& strm, const spob::RecoverCommit& rc)
 }
 
 std::ostream&
+spob::operator<<(std::ostream& strm, const spob::RecoverInform& ri)
+{
+  return strm << "RecoverInform {" <<
+    "primary: " << ri.primary_ <<
+    ", snapshot: " << ri.snapshot_ <<
+    "}";
+}
+
+std::ostream&
 spob::operator<<(std::ostream& strm, const spob::RecoverReconnect& rr)
 {
   return strm << "RecoverReconnect {" <<
@@ -127,6 +136,15 @@ spob::operator<<(std::ostream& strm, const spob::Commit& c)
   return strm << "Commit {" <<
     "primary: " << c.primary_ <<
     ", mid: 0x" << std::hex << c.mid_ << std::dec <<
+    "}";
+}
+
+std::ostream&
+spob::operator<<(std::ostream& strm, const spob::Inform& i)
+{
+  return strm << "Inform {" <<
+    "primary: " << i.primary_ <<
+    ", message: " << TransactionToString(i.t_) <<
     "}";
 }
 

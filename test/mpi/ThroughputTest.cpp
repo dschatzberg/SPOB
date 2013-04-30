@@ -236,11 +236,14 @@ int main(int argc, char* argv[])
 {
   po::options_description desc("Options");
   uint32_t seed;
+  uint32_t replicas;
   try {
     desc.add_options()
       ("help", "produce help message")
       ("v", po::value<bool>(&verbose)->default_value(false),
        "enable verbose output")
+      ("r", po::value<uint32_t>(&replicas)->required(),
+       "set number of replicas")
       ("samples", po::value<uint32_t>(&samples)->required(),
        "set number of samples")
       ("ts", po::value<my_time_t>(&sample_time)->required(),
@@ -276,7 +279,7 @@ int main(int argc, char* argv[])
   Communicator comm(&sm, verbose);
   mpi::communicator world;
   gen.seed(seed + world.rank());
-  sm = new spob::StateMachine(world.rank(), world.size(), comm, cb);
+  sm = new spob::StateMachine(world.rank(), world.size(), replicas, comm, cb);
   sm->Start();
   while (!quit) {
     if (!no_comm) {

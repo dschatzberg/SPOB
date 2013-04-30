@@ -19,10 +19,12 @@ namespace spob {
     virtual void Send(const RecoverPropose& rp, uint32_t to) = 0;
     virtual void Send(const AckRecover& ar, uint32_t to) = 0;
     virtual void Send(const RecoverCommit& rc, uint32_t to) = 0;
+    virtual void Send(const RecoverInform& ri, uint32_t to) = 0;
     virtual void Send(const RecoverReconnect& rr, uint32_t to) = 0;
     virtual void Send(const Propose& p, uint32_t to) = 0;
     virtual void Send(const Ack& a, uint32_t to) = 0;
     virtual void Send(const Commit& c, uint32_t to) = 0;
+    virtual void Send(const Inform& i, uint32_t to) = 0;
     virtual void Send(const Reconnect& r, uint32_t to) = 0;
     virtual void Send(const ReconnectResponse& recon_resp, uint32_t to) = 0;
 
@@ -41,7 +43,7 @@ namespace spob {
       virtual void operator()(Status status, uint32_t primary) = 0;
       virtual ~Callback() {}
     };
-    StateMachine(uint32_t rank, uint32_t size,
+    StateMachine(uint32_t rank, uint32_t size, uint32_t replicas,
                  CommunicatorInterface& comm, Callback& cb);
 
     void Start();
@@ -53,10 +55,12 @@ namespace spob {
     void Receive(const spob::RecoverPropose& rp, uint32_t from);
     void Receive(const spob::AckRecover& ar, uint32_t from);
     void Receive(const spob::RecoverCommit& rc, uint32_t from);
+    void Receive(const spob::RecoverInform& ri, uint32_t from);
     void Receive(const spob::RecoverReconnect& rr, uint32_t from);
     void Receive(const spob::Propose& p, uint32_t from);
     void Receive(const spob::Ack& a, uint32_t from);
     void Receive(const spob::Commit& c, uint32_t from);
+    void Receive(const spob::Inform& c, uint32_t from);
     void Receive(const spob::Reconnect& r, uint32_t from);
     void Receive(const spob::ReconnectResponse& recon_resp, uint32_t from);
     void Receive(const spob::Failure& failure);
@@ -68,13 +72,16 @@ namespace spob {
     void RecoverPropose();
     void AckRecover();
     void RecoverCommit();
+    void RecoverInform();
     void Propose(const spob::Propose& p);
     void Ack(const spob::Ack& a);
     void Commit(const spob::Commit& c);
+    void Inform(const spob::Inform& i);
     void PrintState();
 
     uint32_t rank_;
     uint32_t size_;
+    uint32_t replicas_;
     CommunicatorInterface& comm_;
     Callback& cb_;
     uint32_t primary_;
@@ -90,6 +97,7 @@ namespace spob {
     unsigned int tree_acks_;
     std::list<uint32_t> ancestors_;
     std::map<uint32_t, std::pair<uint32_t, uint64_t> > children_;
+    std::map<uint32_t, uint64_t> listener_children_;
     typedef std::map<uint64_t,
                      std::pair<std::string,
                                boost::icl::interval_set<uint32_t> > > LogType;
@@ -98,5 +106,7 @@ namespace spob {
     boost::icl::interval_set<uint32_t> lower_correct_;
     boost::icl::interval_set<uint32_t> upper_correct_;
     boost::icl::interval_set<uint32_t> subtree_correct_;
+    boost::icl::interval_set<uint32_t> listener_subtree_correct_;
+    boost::icl::interval_set<uint32_t> listener_upper_correct_;
   };
 }

@@ -3,17 +3,19 @@
 using namespace spob;
 namespace icl = boost::icl;
 
-StateMachine::StateMachine(uint32_t rank, uint32_t size,
+StateMachine::StateMachine(uint32_t rank, uint32_t size, uint32_t replicas,
                            CommunicatorInterface& comm,
                            Callback& cb)
-  : rank_(rank), size_(size), comm_(comm), cb_(cb)
+  : rank_(rank), size_(size), replicas_(replicas), comm_(comm), cb_(cb)
 {
   count_ = 0;
   last_proposed_mid_ = 0;
   last_acked_mid_ = 0;
   last_committed_mid_ = 0;
   lower_correct_ += icl::interval<uint32_t>::closed(0, rank);
-  upper_correct_ += icl::interval<uint32_t>::closed(rank + 1, size - 1);
+  upper_correct_ += icl::interval<uint32_t>::closed(rank + 1, replicas - 1);
+  listener_upper_correct_ +=
+    icl::interval<uint32_t>::closed(std::max(rank + 1, replicas), size - 1);
 }
 
 void
@@ -61,8 +63,13 @@ StateMachine::Receive(const spob::ConstructTree& ct, uint32_t from)
     ancestors_ = ct.ancestors_;
     primary_ = new_primary;
     count_ = ct.count_;
-    subtree_correct_ = upper_correct_ -
-      icl::interval<uint32_t>::closed(ct.max_rank_ + 1, size_ - 1);
+    if (rank_ < replicas_) {
+      subtree_correct_ = upper_correct_ -
+        icl::interval<uint32_t>::closed(ct.max_rank_ + 1, replicas_ - 1);
+    } else {
+      listener_subtree_correct_ = listener_upper_correct_ -
+        icl::interval<uint32_t>::closed(ct.max_rank_ + 1, size_ - 1);
+    }
     ConstructTree();
   }
 }
@@ -70,10 +77,15 @@ StateMachine::Receive(const spob::ConstructTree& ct, uint32_t from)
 void
 StateMachine::Receive(const spob::AckTree& at, uint32_t from)
 {
-  if (at.primary_ == primary_ && at.count_ == count_ && children_.count(from)) {
+  if (at.primary_ == primary_ && at.count_ == count_ &&
+      (children_.count(from) || listener_children_.count(from))) {
     tree_acks_++;
-    children_[from].second = at.last_mid_;
-    if (tree_acks_ == children_.size()) {
+    if (from < replicas_) {
+      children_[from].second = at.last_mid_;
+    } else {
+      listener_children_[from] = at.last_mid_;
+    }
+    if (tree_acks_ == (children_.size() + listener_children_.size())) {
       AckTree();
     }
   }
@@ -183,6 +195,15 @@ StateMachine::Receive(const spob::RecoverCommit& rc, uint32_t from)
 }
 
 void
+StateMachine::Receive(const spob::RecoverInform& ri, uint32_t from)
+{
+  if (ri.primary_ == primary_ && from == ancestors_.front()) {
+    RecoverInform();
+    cb_(kFollowing, primary_);
+  }
+}
+
+void
 StateMachine::Receive(const spob::Propose& p, uint32_t from)
 {
   if (p.primary_ == primary_ && from == ancestors_.front()) {
@@ -216,6 +237,11 @@ StateMachine::Receive(const spob::Ack& a, uint32_t from)
         c.primary_ = primary_;
         c.mid_ = id;
         Commit(c);
+        spob::Inform i;
+        i.primary_ = primary_;
+        i.t_.first = id;
+        i.t_.second = log_[id].first;
+        Inform(i);
       } else {
         Ack(a);
       }
@@ -238,10 +264,31 @@ StateMachine::Commit(const spob::Commit& c)
 }
 
 void
+StateMachine::Inform(const spob::Inform& i)
+{
+  for (std::map<uint32_t, uint64_t>::const_iterator it =
+         listener_children_.begin(); it != listener_children_.end(); ++it) {
+    comm_.Send(i, it->first);
+  }
+  if (rank_ != primary_) {
+    cb_(i.t_.first, i.t_.second);
+    last_committed_mid_ = i.t_.first;
+  }
+}
+
+void
 StateMachine::Receive(const spob::Commit& c, uint32_t from)
 {
   if (c.primary_ == primary_ && from == ancestors_.front()) {
     Commit(c);
+  }
+}
+
+void
+StateMachine::Receive(const spob::Inform& i, uint32_t from)
+{
+  if (i.primary_ == primary_ && from == ancestors_.front()) {
+    Inform(i);
   }
 }
 
@@ -326,6 +373,7 @@ void
 StateMachine::Recover()
 {
   children_.clear();
+  listener_children_.clear();
   ancestors_.clear();
   count_ = 0;
   // If the set of failed processes contains the set of processes
@@ -334,7 +382,7 @@ StateMachine::Recover()
   primary_ = icl::first(lower_correct_);
   if (primary_ == rank_) {
     subtree_correct_ = upper_correct_;
-    ancestors_.clear();
+    listener_subtree_correct_ = listener_upper_correct_;
     ConstructTree();
   }
   cb_(kRecovering, 0);
@@ -343,48 +391,90 @@ StateMachine::Recover()
 void
 StateMachine::ConstructTree()
 {
+  constructing_ = true;
   got_propose_ = false;
   acked_ = false;
   tree_acks_ = 0;
   children_.clear();
-  if (subtree_correct_.empty()) {
+  listener_children_.clear();
+  if ((rank_ < replicas_ && subtree_correct_.empty()) ||
+      (rank_ >= replicas_ && listener_subtree_correct_.empty())) {
     AckTree();
   } else {
 
-    //left child is next lowest rank above ours
-    uint32_t left_child = icl::first(subtree_correct_);
+    if (rank_ < replicas_ && !subtree_correct_.empty()) {
+      //left child is next lowest rank above ours
+      uint32_t left_child = icl::first(subtree_correct_);
 
-    //right child is the median process in our subtree
-    uint32_t right_child = 0;
-    uint32_t pos = icl::cardinality(subtree_correct_) / 2;
-    for (icl::interval_set<uint32_t>::const_iterator it =
-           subtree_correct_.begin();
-         it != subtree_correct_.end(); ++it) {
-      if (icl::cardinality(*it) > pos) {
-        right_child = icl::first(*it) + pos;
-        break;
+      //right child is the median process in our subtree
+      uint32_t right_child = 0;
+      uint32_t pos = icl::cardinality(subtree_correct_) / 2;
+      for (icl::interval_set<uint32_t>::const_iterator it =
+             subtree_correct_.begin();
+           it != subtree_correct_.end(); ++it) {
+        if (icl::cardinality(*it) > pos) {
+          right_child = icl::first(*it) + pos;
+          break;
+        }
+        pos -= icl::cardinality(*it);
       }
-      pos -= icl::cardinality(*it);
+      assert(right_child > 0);
+
+      spob::ConstructTree ct;
+      ct.ancestors_.push_back(rank_);
+      ct.ancestors_.insert(ct.ancestors_.end(), ancestors_.begin(),
+                           ancestors_.end());
+      ct.count_ = count_;
+
+      //tell left child to construct
+      uint32_t left_child_max_rank = std::max(left_child, right_child - 1);
+      ct.max_rank_ = left_child_max_rank;
+      comm_.Send(ct, left_child);
+      children_[left_child] = std::make_pair(left_child_max_rank, 0);
+
+      if (left_child != right_child) {
+        //tell right child to construct
+        ct.max_rank_ = icl::last(subtree_correct_);
+        comm_.Send(ct, right_child);
+        children_[right_child] = std::make_pair(ct.max_rank_, 0);
+      }
     }
-    assert(right_child > 0);
 
-    spob::ConstructTree ct;
-    ct.ancestors_.push_back(rank_);
-    ct.ancestors_.insert(ct.ancestors_.end(), ancestors_.begin(),
-                         ancestors_.end());
-    ct.count_ = count_;
+    if ((rank_ >= replicas_ || rank_ == primary_) &&
+        !listener_subtree_correct_.empty()) {
+      uint32_t left_child = icl::first(listener_subtree_correct_);
 
-    //tell left child to construct
-    uint32_t left_child_max_rank = std::max(left_child, right_child - 1);
-    ct.max_rank_ = left_child_max_rank;
-    comm_.Send(ct, left_child);
-    children_[left_child] = std::make_pair(left_child_max_rank, 0);
+      uint32_t right_child = 0;
+      uint32_t pos = icl::cardinality(listener_subtree_correct_) / 2;
+      for (icl::interval_set<uint32_t>::const_iterator it =
+             listener_subtree_correct_.begin();
+           it != listener_subtree_correct_.end(); ++it) {
+        if (icl::cardinality(*it) > pos) {
+          right_child = icl::first(*it) + pos;
+          break;
+        }
+        pos -= icl::cardinality(*it);
+      }
+      assert(right_child > 0);
 
-    if (left_child != right_child) {
-      //tell right child to construct
-      ct.max_rank_ = icl::last(subtree_correct_);
-      comm_.Send(ct, right_child);
-      children_[right_child] = std::make_pair(ct.max_rank_, 0);
+      spob::ConstructTree ct;
+      ct.ancestors_.push_back(rank_);
+      ct.ancestors_.insert(ct.ancestors_.end(), ancestors_.begin(),
+                           ancestors_.end());
+      ct.count_ = count_;
+
+      //tell left child to construct
+      uint32_t left_child_max_rank = std::max(left_child, right_child - 1);
+      ct.max_rank_ = left_child_max_rank;
+      comm_.Send(ct, left_child);
+      listener_children_[left_child] = left_child_max_rank;
+
+      if (left_child != right_child) {
+        //tell right child to construct
+        ct.max_rank_ = icl::last(listener_subtree_correct_);
+        comm_.Send(ct, right_child);
+        listener_children_[right_child] = ct.max_rank_;
+      }
     }
   }
 }
@@ -401,7 +491,11 @@ StateMachine::AckTree()
     spob::AckTree at;
     at.primary_ = primary_;
     at.count_ = count_;
-    at.last_mid_ = last_proposed_mid_;
+    if (rank_ < replicas_) {
+      at.last_mid_ = last_proposed_mid_;
+    } else {
+      at.last_mid_ = last_committed_mid_;
+    }
     comm_.Send(at, ancestors_.front());
   }
 }
@@ -412,20 +506,22 @@ StateMachine::RecoverPropose()
   spob::RecoverPropose rp;
   rp.primary_ = primary_;
   // For each child, send a RECOVER_PROPOSE to get them up to date
-  for(std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it
-        = children_.begin();
-      it != children_.end(); ++it) {
-    if (it->second.second <= last_proposed_mid_) {
-      rp.type_ = RecoverPropose::kDiff;
-      for(LogType::const_iterator it2 = log_.upper_bound(it->second.second);
-          it2 != log_.end(); ++it2) {
-        rp.proposals_.push_back(std::make_pair(it2->first, it2->second.first));
+  if (rank_ < replicas_) {
+    for(std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it
+          = children_.begin();
+        it != children_.end(); ++it) {
+      if (it->second.second <= last_proposed_mid_) {
+        rp.type_ = RecoverPropose::kDiff;
+        for(LogType::const_iterator it2 = log_.upper_bound(it->second.second);
+            it2 != log_.end(); ++it2) {
+          rp.proposals_.push_back(std::make_pair(it2->first, it2->second.first));
+        }
+      } else {
+        rp.type_ = RecoverPropose::kTrunc;
+        rp.last_mid_ = last_proposed_mid_;
       }
-    } else {
-      rp.type_ = RecoverPropose::kTrunc;
-      rp.last_mid_ = last_proposed_mid_;
+      comm_.Send(rp, it->first);
     }
-    comm_.Send(rp, it->first);
   }
   recover_ack_ = subtree_correct_;
 }
@@ -437,6 +533,7 @@ StateMachine::AckRecover()
   last_acked_mid_ = last_proposed_mid_;
   if (rank_ == primary_) {
     RecoverCommit();
+    RecoverInform();
     current_mid_ = ((last_proposed_mid_ >> 32) + 1) << 32;
     // Make sure we don't wrap around the epoch
     assert(current_mid_ > last_proposed_mid_);
@@ -453,18 +550,34 @@ StateMachine::RecoverCommit()
 {
   spob::RecoverCommit rc;
   rc.primary_ = primary_;
-  for(std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it
-        = children_.begin();
-      it != children_.end(); ++it) {
+  for (std::map<uint32_t, std::pair<uint32_t, uint64_t> >::const_iterator it
+         = children_.begin();
+       it != children_.end(); ++it) {
     comm_.Send(rc, it->first);
   }
-  for(LogType::const_iterator it = log_.begin(); it != log_.end(); ++it) {
+  for (LogType::const_iterator it = log_.begin(); it != log_.end(); ++it) {
     cb_(it->first, it->second.first);
   }
   log_.clear();
   recovering_ = false;
 }
 
+void
+StateMachine::RecoverInform()
+{
+  spob::RecoverInform ri;
+  ri.primary_ = primary_;
+  //FIXME: get snapshot
+  for (std::map<uint32_t, uint64_t>::const_iterator it
+       = listener_children_.begin();
+       it != listener_children_.end(); ++it) {
+    comm_.Send(ri, it->first);
+  }
+  for (LogType::const_iterator it = log_.begin(); it != log_.end(); ++it) {
+    cb_(it->first, it->second.first);
+  }
+  recovering_ = false;
+}
 void
 StateMachine::Receive(const spob::Failure& f)
 {
