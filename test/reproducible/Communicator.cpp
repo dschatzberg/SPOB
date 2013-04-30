@@ -65,6 +65,11 @@ Communicator::Send(const spob::RecoverReconnect& rr, uint32_t to)
   DoSend(rr, to);
 }
 void
+Communicator::Send(const spob::ListenerRecoverReconnect& lrr, uint32_t to)
+{
+  DoSend(lrr, to);
+}
+void
 Communicator::Send(const spob::RecoverCommit& rc, uint32_t to)
 {
   DoSend(rc, to);
@@ -100,7 +105,17 @@ Communicator::Send(const spob::Reconnect& r, uint32_t to)
   DoSend(r, to);
 }
 void
+Communicator::Send(const spob::ListenerReconnect& lr, uint32_t to)
+{
+  DoSend(lr, to);
+}
+void
 Communicator::Send(const spob::ReconnectResponse& recon_resp, uint32_t to)
 {
   DoSend(recon_resp, to);
+}
+void
+Communicator::Send(const spob::ListenerReconnectResponse& lrecon_resp, uint32_t to)
+{
+  DoSend(lrecon_resp, to);
 }

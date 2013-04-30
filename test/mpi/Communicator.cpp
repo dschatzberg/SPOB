@@ -61,6 +61,7 @@ namespace boost {
     serialize(Archive &ar, spob::RecoverInform &ri, const unsigned int file_version)
     {
       ar & ri.primary_;
+      ar & ri.last_committed_;
       ar & ri.snapshot_;
     }
 
@@ -73,6 +74,14 @@ namespace boost {
       ar & rr.last_proposed_;
       ar & rr.got_propose_;
       ar & rr.acked_;
+    }
+
+    template<class Archive>
+    inline void
+    serialize(Archive &ar, spob::ListenerRecoverReconnect &lrr, const unsigned int file_version)
+    {
+      ar & lrr.primary_;
+      ar & lrr.last_committed_;
     }
 
     template<class Archive>
@@ -119,11 +128,28 @@ namespace boost {
 
     template<class Archive>
     inline void
+    serialize(Archive &ar, spob::ListenerReconnect &lr, const unsigned int file_version)
+    {
+      ar & lr.primary_;
+      ar & lr.last_committed_;
+    }
+
+    template<class Archive>
+    inline void
     serialize(Archive& ar, spob::ReconnectResponse& rr, const unsigned int file_version)
     {
       ar & rr.primary_;
       ar & rr.last_committed_;
       ar & rr.proposals_;
+    }
+
+    template<class Archive>
+    inline void
+    serialize(Archive& ar, spob::ListenerReconnectResponse& lrr, const unsigned int file_version)
+    {
+      ar & lrr.primary_;
+      ar & lrr.last_committed_;
+      ar & lrr.snapshot_;
     }
   }
 }
@@ -199,6 +225,12 @@ Communicator::Send(const spob::RecoverReconnect& rr, uint32_t to)
 }
 
 void
+Communicator::Send(const spob::ListenerRecoverReconnect& lrr, uint32_t to)
+{
+  DoSend(lrr, to);
+}
+
+void
 Communicator::Send(const spob::RecoverCommit& rc, uint32_t to)
 {
   DoSend(rc, to);
@@ -241,9 +273,21 @@ Communicator::Send(const spob::Reconnect& r, uint32_t to)
 }
 
 void
+Communicator::Send(const spob::ListenerReconnect& lr, uint32_t to)
+{
+  DoSend(lr, to);
+}
+
+void
 Communicator::Send(const spob::ReconnectResponse& recon_resp, uint32_t to)
 {
   DoSend(recon_resp, to);
+}
+
+void
+Communicator::Send(const spob::ListenerReconnectResponse& lrecon_resp, uint32_t to)
+{
+  DoSend(lrecon_resp, to);
 }
 
 void

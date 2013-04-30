@@ -19,12 +19,15 @@ public:
   void Send(const spob::RecoverCommit& rc, uint32_t to);
   void Send(const spob::RecoverInform& ri, uint32_t to);
   void Send(const spob::RecoverReconnect& rr, uint32_t to);
+  void Send(const spob::ListenerRecoverReconnect& lrr, uint32_t to);
   void Send(const spob::Propose& p, uint32_t to);
   void Send(const spob::Ack& a, uint32_t to);
   void Send(const spob::Commit& c, uint32_t to);
   void Send(const spob::Inform& i, uint32_t to);
   void Send(const spob::Reconnect& r, uint32_t to);
+  void Send(const spob::ListenerReconnect& lr, uint32_t to);
   void Send(const spob::ReconnectResponse& recon_resp, uint32_t to);
+  void Send(const spob::ListenerReconnectResponse& lrecon_resp, uint32_t to);
   void Process();
   ~Communicator();
 private:
@@ -52,12 +55,15 @@ private:
     spob::RecoverCommit,
     spob::RecoverInform,
     spob::RecoverReconnect,
+    spob::ListenerRecoverReconnect,
     spob::Propose,
     spob::Ack,
     spob::Commit,
     spob::Inform,
     spob::Reconnect,
-    spob::ReconnectResponse> Message;
+    spob::ListenerReconnect,
+    spob::ReconnectResponse,
+    spob::ListenerReconnectResponse> Message;
   Message message_;
   uint32_t rank_;
   bool verbose_;

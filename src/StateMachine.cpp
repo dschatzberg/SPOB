@@ -186,6 +186,23 @@ StateMachine::Receive(const spob::RecoverReconnect& rr, uint32_t from)
 }
 
 void
+StateMachine::Receive(const spob::ListenerRecoverReconnect& lrr, uint32_t from)
+{
+  if (lrr.primary_ == primary_) {
+    if (!recovering_) {
+      spob::RecoverInform ri;
+      ri.primary_ = primary_;
+      ri.last_committed_ = last_committed_mid_;
+      if (last_committed_mid_ > lrr.last_committed_) {
+        //FIXME: get snapshot
+      }
+      comm_.Send(ri, from);
+    }
+    listener_children_[from] = lrr.last_committed_;
+  }
+}
+
+void
 StateMachine::Receive(const spob::RecoverCommit& rc, uint32_t from)
 {
   if (rc.primary_ == primary_ && from == ancestors_.front()) {
@@ -198,6 +215,10 @@ void
 StateMachine::Receive(const spob::RecoverInform& ri, uint32_t from)
 {
   if (ri.primary_ == primary_ && from == ancestors_.front()) {
+    if (ri.last_committed_ > last_committed_mid_) {
+      last_committed_mid_ = ri.last_committed_;
+      //FIXME: apply snapshot
+    }
     RecoverInform();
     cb_(kFollowing, primary_);
   }
@@ -233,15 +254,15 @@ StateMachine::Receive(const spob::Ack& a, uint32_t from)
       icl::interval<uint32_t>::closed(from, children_[from].first);
     if (log_[id].second.empty()) {
       if (rank_ == primary_) {
-        spob::Commit c;
-        c.primary_ = primary_;
-        c.mid_ = id;
-        Commit(c);
         spob::Inform i;
         i.primary_ = primary_;
         i.t_.first = id;
         i.t_.second = log_[id].first;
         Inform(i);
+        spob::Commit c;
+        c.primary_ = primary_;
+        c.mid_ = id;
+        Commit(c);
       } else {
         Ack(a);
       }
@@ -317,6 +338,11 @@ StateMachine::Receive(const spob::Reconnect& r, uint32_t from)
         for (LogType::iterator it2 = log_.begin();
              it2 != cmp; ++it2) {
           if (rank_ == primary_) {
+            spob::Inform i;
+            i.primary_ = primary_;
+            i.t_.first = it2->first;
+            i.t_.second = log_[it2->first].first;
+            Inform(i);
             spob::Commit c;
             c.primary_ = primary_;
             c.mid_ = it2->first;
@@ -331,6 +357,21 @@ StateMachine::Receive(const spob::Reconnect& r, uint32_t from)
         break;
       }
     }
+  }
+}
+
+void
+StateMachine::Receive(const spob::ListenerReconnect& lr, uint32_t from)
+{
+  if (lr.primary_ == primary_ && icl::contains(listener_subtree_correct_, from)) {
+    ListenerReconnectResponse lrr;
+    lrr.primary_ = primary_;
+    lrr.last_committed_ = last_committed_mid_;
+    if (lr.last_committed_ > last_committed_mid_) {
+      //FIXME: Get snapshot
+    }
+    comm_.Send(lrr, from);
+    listener_children_[from] = 0;
   }
 }
 
@@ -370,6 +411,22 @@ StateMachine::Receive(const spob::ReconnectResponse& recon_resp, uint32_t from)
 }
 
 void
+StateMachine::Receive(const spob::ListenerReconnectResponse& lrecon_resp, uint32_t from)
+{
+  if (lrecon_resp.primary_ == primary_ && from == ancestors_.front()) {
+    if(lrecon_resp.last_committed_ > last_committed_mid_) {
+      //FIXME: Apply snapshot
+      last_committed_mid_ = lrecon_resp.last_committed_;
+      for (std::map<uint32_t, uint64_t>::const_iterator it
+             = listener_children_.begin();
+           it != listener_children_.end(); ++it) {
+        comm_.Send(lrecon_resp, it->first);
+      }
+    }
+  }
+}
+
+void
 StateMachine::Recover()
 {
   children_.clear();
@@ -392,6 +449,7 @@ void
 StateMachine::ConstructTree()
 {
   constructing_ = true;
+  recovering_ = true;
   got_propose_ = false;
   acked_ = false;
   tree_acks_ = 0;
@@ -567,14 +625,17 @@ StateMachine::RecoverInform()
 {
   spob::RecoverInform ri;
   ri.primary_ = primary_;
-  //FIXME: get snapshot
+  std::string snapshot;
   for (std::map<uint32_t, uint64_t>::const_iterator it
        = listener_children_.begin();
        it != listener_children_.end(); ++it) {
+    ri.last_committed_ = last_committed_mid_;
+    if (last_committed_mid_ > it->second && snapshot.empty()) {
+      //FIXME: get snapshot
+      ri.snapshot_ = snapshot;
+    }
     comm_.Send(ri, it->first);
-  }
-  for (LogType::const_iterator it = log_.begin(); it != log_.end(); ++it) {
-    cb_(it->first, it->second.first);
+    ri.snapshot_.clear();
   }
   recovering_ = false;
 }
@@ -586,84 +647,110 @@ StateMachine::Receive(const spob::Failure& f)
     lower_correct_ -= f.rank_;
   } else {
     upper_correct_ -= f.rank_;
+    listener_upper_correct_ -= f.rank_;
   }
 
   if (f.rank_ == primary_) {
     Recover();
-  } else if (constructing_ && children_.count(f.rank_)) {
+  } else if (constructing_ &&
+             (children_.count(f.rank_) || listener_children_.count(f.rank_))) {
     // failure of child during tree construction
     spob::NakTree nt;
     nt.primary_ = primary_;
     nt.count_ = count_;
     NakTree(nt);
   } else if (!constructing_) {
-    if (icl::contains(subtree_correct_, f.rank_)) {
-      // failure in our subtree
-      subtree_correct_ -= f.rank_;
-      children_.erase(f.rank_);
-      if (recovering_) {
-        // failure doing recovery, check if we can ack
-        recover_ack_ -= f.rank_;
-        if (recover_ack_.empty()) {
-          AckRecover();
-        }
-      } else {
-        // failure during broadcast phase, check outstanding proposals
-        // to see if we can ack any of them
-        for (LogType::reverse_iterator it = log_.rbegin();
-             it != static_cast<LogType::reverse_iterator>
-               (log_.upper_bound(last_acked_mid_)); ++it) {
-          it->second.second -= f.rank_;
-          if (it->second.second.empty()) {
-            for (LogType::iterator it2 = log_.upper_bound(last_acked_mid_);
-                 it2 != it.base()++; it2++) {
-              if (rank_ == primary_) {
-                spob::Commit c;
-                c.primary_ = primary_;
-                c.mid_ = it2->first;
-                Commit(c);
-              } else {
-                spob::Ack a;
-                a.primary_ = primary_;
-                a.mid_ = it2->first;
-                Ack(a);
-              }
-            }
-            break;
-          }
-        }
-      }
-    } else if (f.rank_ == ancestors_.front()) {
+    if (f.rank_ == ancestors_.front()) {
       // our parent failed, find the closest ancestor and reconnect
       for (std::list<uint32_t>::iterator it = ++(ancestors_.begin());
            it != ancestors_.end(); ++it) {
         if (icl::contains(lower_correct_, *it)) {
           if (recovering_) {
-            RecoverReconnect rr;
-            rr.primary_ = primary_;
-            if (subtree_correct_.empty()) {
-              rr.max_rank_ = rank_;
+            if (rank_ < replicas_) {
+              RecoverReconnect rr;
+              rr.primary_ = primary_;
+              if (subtree_correct_.empty()) {
+                rr.max_rank_ = rank_;
+              } else {
+                rr.max_rank_ = icl::last(subtree_correct_);
+              }
+              rr.got_propose_ = got_propose_;
+              rr.acked_ = acked_;
+              comm_.Send(rr, *it);
             } else {
-              rr.max_rank_ = icl::last(subtree_correct_);
+              ListenerRecoverReconnect lrr;
+              lrr.primary_ = primary_;
+              comm_.Send(lrr, *it);
             }
-            rr.got_propose_ = got_propose_;
-            rr.acked_ = acked_;
-            comm_.Send(rr, *it);
           } else {
-            Reconnect r;
-            r.primary_ = primary_;
-            if (subtree_correct_.empty()) {
-              r.max_rank_ = rank_;
+            if (rank_ < replicas_) {
+              Reconnect r;
+              r.primary_ = primary_;
+              if (subtree_correct_.empty()) {
+                r.max_rank_ = rank_;
+              } else {
+                r.max_rank_ = icl::last(subtree_correct_);
+              }
+              r.last_proposed_ = last_proposed_mid_;
+              r.last_acked_ = last_acked_mid_;
+              comm_.Send(r, *it);
             } else {
-              r.max_rank_ = icl::last(subtree_correct_);
+              ListenerReconnect lr;
+              lr.primary_ = primary_;
+              lr.last_committed_ = last_committed_mid_;
+              comm_.Send(lr, *it);
             }
-            r.last_proposed_ = last_proposed_mid_;
-            r.last_acked_ = last_acked_mid_;
-            comm_.Send(r, *it);
           }
           ancestors_.erase(ancestors_.begin(), it);
           break;
         }
+      }
+    } else {
+      if (icl::contains(subtree_correct_, f.rank_)) {
+        // failure in our subtree
+        subtree_correct_ -= f.rank_;
+        children_.erase(f.rank_);
+        if (recovering_) {
+          // failure doing recovery, check if we can ack
+          recover_ack_ -= f.rank_;
+          if (recover_ack_.empty()) {
+            AckRecover();
+          }
+        } else {
+          // failure during broadcast phase, check outstanding proposals
+          // to see if we can ack any of them
+          for (LogType::reverse_iterator it = log_.rbegin();
+               it != static_cast<LogType::reverse_iterator>
+                 (log_.upper_bound(last_acked_mid_)); ++it) {
+            it->second.second -= f.rank_;
+            if (it->second.second.empty()) {
+              for (LogType::iterator it2 = log_.upper_bound(last_acked_mid_);
+                   it2 != it.base()++; it2++) {
+                if (rank_ == primary_) {
+                  spob::Inform i;
+                  i.primary_ = primary_;
+                  i.t_.first = it2->first;
+                  i.t_.second = log_[it2->first].first;
+                  Inform(i);
+                  spob::Commit c;
+                  c.primary_ = primary_;
+                  c.mid_ = it2->first;
+                  Commit(c);
+                } else {
+                  spob::Ack a;
+                  a.primary_ = primary_;
+                  a.mid_ = it2->first;
+                  Ack(a);
+                }
+              }
+              break;
+            }
+          }
+        }
+      }
+      if (icl::contains(listener_subtree_correct_, f.rank_)) {
+        listener_subtree_correct_ -= f.rank_;
+        listener_children_.erase(f.rank_);
       }
     }
   }

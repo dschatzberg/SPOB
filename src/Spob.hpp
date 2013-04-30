@@ -21,12 +21,15 @@ namespace spob {
     virtual void Send(const RecoverCommit& rc, uint32_t to) = 0;
     virtual void Send(const RecoverInform& ri, uint32_t to) = 0;
     virtual void Send(const RecoverReconnect& rr, uint32_t to) = 0;
+    virtual void Send(const ListenerRecoverReconnect& rr, uint32_t to) = 0;
     virtual void Send(const Propose& p, uint32_t to) = 0;
     virtual void Send(const Ack& a, uint32_t to) = 0;
     virtual void Send(const Commit& c, uint32_t to) = 0;
     virtual void Send(const Inform& i, uint32_t to) = 0;
     virtual void Send(const Reconnect& r, uint32_t to) = 0;
+    virtual void Send(const ListenerReconnect& lr, uint32_t to) = 0;
     virtual void Send(const ReconnectResponse& recon_resp, uint32_t to) = 0;
+    virtual void Send(const ListenerReconnectResponse& lrecon_resp, uint32_t to) = 0;
 
     virtual ~CommunicatorInterface() {}
   };
@@ -57,12 +60,15 @@ namespace spob {
     void Receive(const spob::RecoverCommit& rc, uint32_t from);
     void Receive(const spob::RecoverInform& ri, uint32_t from);
     void Receive(const spob::RecoverReconnect& rr, uint32_t from);
+    void Receive(const spob::ListenerRecoverReconnect& lrr, uint32_t from);
     void Receive(const spob::Propose& p, uint32_t from);
     void Receive(const spob::Ack& a, uint32_t from);
     void Receive(const spob::Commit& c, uint32_t from);
     void Receive(const spob::Inform& c, uint32_t from);
     void Receive(const spob::Reconnect& r, uint32_t from);
+    void Receive(const spob::ListenerReconnect& lr, uint32_t from);
     void Receive(const spob::ReconnectResponse& recon_resp, uint32_t from);
+    void Receive(const spob::ListenerReconnectResponse& lrecon_resp, uint32_t from);
     void Receive(const spob::Failure& failure);
   private:
     void Recover();

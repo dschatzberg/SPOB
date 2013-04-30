@@ -54,6 +54,7 @@ namespace spob {
 
   struct RecoverInform {
     uint32_t primary_;
+    uint64_t last_committed_;
     std::string snapshot_;
   };
   std::ostream& operator<<(std::ostream& strm, const RecoverInform& ri);
@@ -66,6 +67,12 @@ namespace spob {
     bool acked_;
   };
   std::ostream& operator<<(std::ostream& strm, const RecoverReconnect& rr);
+
+  struct ListenerRecoverReconnect {
+    uint32_t primary_;
+    uint64_t last_committed_;
+  };
+  std::ostream& operator<<(std::ostream& strm, const ListenerRecoverReconnect& lrr);
 
   struct Propose {
     uint32_t primary_;
@@ -99,12 +106,25 @@ namespace spob {
   };
   std::ostream& operator<<(std::ostream& strm, const Reconnect& r);
 
+  struct ListenerReconnect {
+    uint32_t primary_;
+    uint64_t last_committed_;
+  };
+  std::ostream& operator<<(std::ostream& strm, const ListenerReconnect& lr);
+
   struct ReconnectResponse {
     uint32_t primary_;
     uint64_t last_committed_;
     std::list<Transaction> proposals_;
   };
   std::ostream& operator<<(std::ostream& strm, const ReconnectResponse& rr);
+
+  struct ListenerReconnectResponse {
+    uint32_t primary_;
+    uint64_t last_committed_;
+    std::string snapshot_;
+  };
+  std::ostream& operator<<(std::ostream& strm, const ListenerReconnectResponse& lrr);
 
   struct Failure {
     uint32_t rank_;

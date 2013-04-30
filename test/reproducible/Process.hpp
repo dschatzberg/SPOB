@@ -50,12 +50,15 @@ public:
     spob::RecoverCommit,
     spob::RecoverInform,
     spob::RecoverReconnect,
+    spob::ListenerRecoverReconnect,
     spob::Propose,
     spob::Ack,
     spob::Commit,
     spob::Inform,
     spob::Reconnect,
-    spob::ReconnectResponse> Message;
+    spob::ListenerReconnect,
+    spob::ReconnectResponse,
+    spob::ListenerReconnectResponse> Message;
   std::vector<std::queue<Message> > queues_;
   std::set<uint32_t> pending_queues_;
   std::set<uint32_t> unreported_;

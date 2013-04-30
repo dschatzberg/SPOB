@@ -96,6 +96,7 @@ spob::operator<<(std::ostream& strm, const spob::RecoverInform& ri)
 {
   return strm << "RecoverInform {" <<
     "primary: " << ri.primary_ <<
+    ", last_committed: 0x" << std::hex << ri.last_committed_ << std::dec <<
     ", snapshot: " << ri.snapshot_ <<
     "}";
 }
@@ -109,6 +110,15 @@ spob::operator<<(std::ostream& strm, const spob::RecoverReconnect& rr)
     ", last_proposed: 0x" << std::hex << rr.last_proposed_ << std::dec <<
     ", got_propose: " << rr.got_propose_ <<
     ", acked: " << rr.acked_ <<
+    "}";
+}
+
+std::ostream&
+spob::operator<<(std::ostream& strm, const spob::ListenerRecoverReconnect& lrr)
+{
+  return strm << "ListenerRecoverReconnect {" <<
+    "primary: " << lrr.primary_ <<
+    ", last_committed: 0x" << std::hex << lrr.last_committed_ << std::dec <<
     "}";
 }
 
@@ -160,6 +170,15 @@ spob::operator<<(std::ostream& strm, const spob::Reconnect& r)
 }
 
 std::ostream&
+spob::operator<<(std::ostream& strm, const spob::ListenerReconnect& lr)
+{
+  return strm << "ListenerReconnect {" <<
+    "primary: " << lr.primary_ <<
+    ", last_committed: 0x" << std::hex << lr.last_committed_ <<
+    "}";
+}
+
+std::ostream&
 spob::operator<<(std::ostream& strm, const spob::ReconnectResponse& rr)
 {
   strm << "ReconnectResponse {" <<
@@ -173,4 +192,14 @@ spob::operator<<(std::ostream& strm, const spob::ReconnectResponse& rr)
     strm << TransactionToString(rr.proposals_.back());
   }
   return strm << "}}";
+}
+
+std::ostream&
+spob::operator<<(std::ostream& strm, const spob::ListenerReconnectResponse& lrr)
+{
+  return strm << "ListenerReconnectResponse {" <<
+    "primary: " << lrr.primary_ <<
+    ", last_committted: 0x" << std::hex << lrr.last_committed_ << std::dec <<
+    ", snapshot: " << lrr.snapshot_ <<
+    "}";
 }
